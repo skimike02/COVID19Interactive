@@ -8,19 +8,21 @@ Created on Tue Jun 23 09:00:48 2020
 import pandas as pd
 from bs4 import BeautifulSoup as bs
 import requests as r
-from bokeh.plotting import figure, output_file, show
-from bokeh.models import NumeralTickFormatter,ColumnDataSource,CDSView,GroupFilter,HoverTool
-from bokeh.layouts import layout,gridplot
+from bokeh.plotting import figure, output_file, show, save
+from bokeh.models import NumeralTickFormatter,ColumnDataSource,CDSView,GroupFilter,HoverTool, Range1d
+from bokeh.layouts import layout,gridplot,row
 from bokeh.palettes import Category20
 from bokeh.transform import factor_cmap
 import itertools
+from datetime import timedelta
+import math
 
 
 output_file("COVID.html")
 
 state='CA'
 counties=['Sacramento','El Dorado','Placer','Yolo']
-fileloc=r'C:\\Users\Micha\Documents\GitHub\COVID19'
+fileloc=r'C:\\Users\Micha\Documents\GitHub\COVID19Interactive'
 
 #Tests and National Stats
 print("Getting national statistics...")
@@ -31,14 +33,14 @@ df=df[df['Date']>='2020-03-15']
 
 def rolling_7_avg(df,date,group,field):
     newname=field+'_avg'
+    df.sort_values(by=[group,date],inplace=True)
     df2=df.sort_values(by=[group,date]).assign(newname=df.groupby([group], as_index=False)[[field]].rolling(7,min_periods=7).mean().reset_index(0, drop=True))
     return df2.rename(columns={"newname": newname})
 
-fields=['positiveIncrease','totalTestResultsIncrease','deathIncrease']
+fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
 
 for field in fields:
     df=rolling_7_avg(df,'Date','state',field)
-
 
 #CA and County Stats
 #print("Getting California county statistics...")
@@ -99,8 +101,10 @@ caData['ICU_usage']=caData['ICU']/caData['ICU_capacity']*100
 caData['hospital_usage']=caData['hospitalized']/caData['hospital_capacity']*100
 caData.sort_values(by=['county','Date'],inplace=True)
 mask=~(caData.county.shift(1)==caData.county)
-caData['positiveIncrease']=caData['newcountconfirmed']
-caData['deathIncrease']=caData['newcountdeaths']
+caData['positiveIncrease']=caData['newcountconfirmed'].clip(0)
+caData['deathIncrease']=caData['newcountdeaths'].clip(0)
+caData['noncovid_icu']=caData.ICU_capacity-caData.ICU-caData.icu_available_beds
+
 fields=['positiveIncrease','deathIncrease']
 
 for field in fields:
@@ -119,9 +123,9 @@ charts=['Tests','Cases','Deaths']
 def statecompare(metric,metricname,foci):
     palette=Category20[20]
     colors = itertools.cycle(palette)
-    p = figure(title=metricname, x_axis_type='datetime', plot_width=600, plot_height=700,
+    p = figure(title=metricname, x_axis_type='datetime', plot_width=800, plot_height=500,
                tools="pan,wheel_zoom,reset,save")
-    grp_list = df.groupby('state').max().positive.nlargest(25).index.sort_values()
+    grp_list = df.groupby('state').max().positive.nlargest(15).index.sort_values()
     lines={}
     for i,color in zip(range(len(grp_list)),colors):
         source = ColumnDataSource(
@@ -151,7 +155,7 @@ def statecompare(metric,metricname,foci):
     p.legend.label_text_font_size="8pt"
     return p
 
-foci=['CA','AZ','FL','GA','SC','TX','NC']
+foci=['CA','AZ','FL','GA','TX','NC','LA']
 state_cases=statecompare('positiveIncrease_avg','New Cases (7-day avg)',foci)
 state_hospitalizations=statecompare('hospitalizedCurrently','Hospitalized',foci)
 state_deaths=statecompare('deathIncrease_avg','Deaths (7-day avg)',foci)
@@ -159,60 +163,102 @@ state_deaths=statecompare('deathIncrease_avg','Deaths (7-day avg)',foci)
 state_hospitalizations.x_range=state_cases.x_range
 state_deaths.x_range=state_cases.x_range
 
-def countychart(metric,metricname,list):
-    palette=Category20[20]
-    colors = itertools.cycle(palette)
-    p = figure(title=metricname, x_axis_type='datetime', plot_width=600, plot_height=700,
-               tools="pan,wheel_zoom,reset,save")
-    grp_list = caData.County.unique()
-    lines={}
-    for i,color in zip(range(len(grp_list)),colors):
-        source = ColumnDataSource(
-        data={'Date':caData.loc[caData.County == grp_list[i]].Date,
-                   'county':caData.loc[caData.County == grp_list[i]].County,
-                   metric:caData.loc[caData.County == grp_list[i]][metric]})
-        lines[grp_list[i]]=p.line(x='Date',
-                y=metric,
-                source=source,
-                legend_label = grp_list[i],
-                color=color,
-                alpha=1,
-                width=2,
-                muted_width=1,
-                muted_color = 'grey',
-                muted_alpha=0.4,
-                muted = True)
-    for county in counties:
-        lines[county].muted=False
-    hover = HoverTool(tooltips =[
-         ('County','@county'),('Date','@Date{%F}'),(metricname,'@'+metric+'{0,}')],
-         formatters={'@Date': 'datetime'})
-    p.add_tools(hover)
-    p.yaxis.formatter=NumeralTickFormatter(format="0,")
-    p.legend.location = "top_left"
-    p.legend.click_policy="mute"
-    p.legend.label_text_font_size="8pt"
-    return p
+l=gridplot(
+        [[state_cases],
+         [state_hospitalizations],
+         [state_deaths]]
+        )
 
-counties=['Sacramento','El Dorado','Placer','Yolo']
-county_cases=countychart('positiveIncrease_avg_percap','New Cases per 100k (7-day avg)',counties)
-county_hospitalizations=countychart('hospital_usage','Hospital Usage',counties)
-county_deaths=countychart('deathIncrease_avg_percap','Deaths per 100k (7-day avg)',counties)
-
-county_cases.x_range=state_cases.x_range
-county_hospitalizations.x_range=state_cases.x_range
-county_deaths.x_range=state_cases.x_range
-
-l=layout([
-    gridplot(
-        [[state_cases,state_hospitalizations,state_deaths,]]
-        ),
-    gridplot(
-        [[county_cases,county_hospitalizations,county_deaths,]]
-        ),
-            ])
-
+save(l,filename=fileloc+'\COVID19_National.html')
 show(l)
 
+#%% ICU 
+source = ColumnDataSource(caData.groupby('Date').sum())
+p = figure(x_axis_type='datetime',
+           plot_height=400,
+           title="CA ICU Capacity",
+           toolbar_location='above',
+           tools=[HoverTool(tooltips=[
+               ('Date','@Date{%F}'),
+               ('ICU','@ICU{0,}')
+               ],
+               formatters={'@Date': 'datetime'})]
+        )
 
+p.varea_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', color=['red','yellow','green'], source=source,
+              legend_label=['COVID Cases','Non-COVID Cases','Available Beds'])
+p.yaxis.formatter=NumeralTickFormatter(format="0,")
+
+p.legend.location = "top_left"
+
+save(p,filename=fileloc+'\COVID19_State.html')
+show(p)
+
+#%% County Gridplot
+
+def countychart(county):
+    source=ColumnDataSource(caData[caData.County==county].groupby('Date').sum())
+    cases = figure(x_axis_type='datetime',
+                   x_range=Range1d(caData.Date.min(),caData.Date.max(),bounds=(caData.Date.min(),caData.Date.max())),
+                   y_range=Range1d(0,math.ceil(caData[caData.County.isin(counties)].positiveIncrease_percap.max()*1.05/10)*10, bounds=(0,math.ceil(caData[caData.County.isin(counties)].positiveIncrease_percap.max()*10))),
+                   title=county,
+                   plot_height=300,
+                   plot_width=450,
+                   toolbar_location='above',
+                   tools=["pan,reset,save,wheel_zoom",HoverTool(tooltips=[
+                   ('Date','@Date{%F}'),
+                   ('Daily New Cases','@positiveIncrease{0,}'),
+                   ('7-day average New Cases','@positiveIncrease_avg{0,}')
+                   ],
+                   formatters={'@Date': 'datetime'})],
+                   active_scroll='wheel_zoom',
+                   sizing_mode = 'scale_width')       
+    cases.line(x='Date', y='positiveIncrease_percap', source=source, color='grey',legend_label='Daily')
+    cases.line(x='Date', y='positiveIncrease_avg_percap', source=source, color='blue',width=2, legend_label='7-day average')
+    cases.legend.location = "top_left"
+    cases.yaxis.axis_label = 'Cases/100k'
+    
+    deaths = figure(x_axis_type='datetime',
+                    y_range=Range1d(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*1.05/10)*10, bounds=(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*10))),
+                   plot_height=300,
+                   plot_width=450,
+                   toolbar_location='above',
+                   tools=["pan,reset,save,xwheel_zoom",HoverTool(tooltips=[
+                   ('Date','@Date{%F}'),
+                   ('Daily New Deaths','@deathIncrease{0,}'),
+                   ('7-day average New Deaths','@deathIncrease_avg{0,}')
+                   ],
+                   formatters={'@Date': 'datetime'})],
+                   active_scroll='xwheel_zoom',
+                   sizing_mode = 'scale_width')        
+    deaths.line(x='Date', y='deathIncrease', source=source, color='grey',legend_label='Daily')
+    deaths.line(x='Date', y='deathIncrease_avg', source=source, color='blue',width=2, legend_label='7-day average')
+    deaths.legend.location = "top_left"
+    deaths.yaxis.axis_label = 'Deaths'
+    
+    ICU = figure(x_axis_type='datetime',
+                 y_range=Range1d(0,caData[caData.County==county].ICU_capacity.max(), bounds=(0,caData[caData.County==county].ICU_capacity.max())),
+               plot_height=300,
+               plot_width=450,
+               toolbar_location='above',
+               tools=["save",HoverTool(tooltips=[
+                   ('Date','@Date{%F}'),
+                   ('ICU','@ICU{0,}')
+                   ],
+                   formatters={'@Date': 'datetime'})],
+                   sizing_mode = 'scale_width',
+            )
+    ICU.varea_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', color=['red','yellow','green'], source=source,
+                  legend_label=['COVID Cases','Non-COVID Cases','Available Beds'])
+    ICU.yaxis.formatter=NumeralTickFormatter(format="0,")
+    ICU.legend.location = "top_left"
+    ICU.yaxis.axis_label = 'ICU Utilization'
+    
+    deaths.x_range=cases.x_range
+    ICU.x_range=cases.x_range
+    return layout(cases,deaths,ICU)
+
+
+save(row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo')),filename=fileloc+'\COVID19_Counties.html')
+show(row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo')))
 
