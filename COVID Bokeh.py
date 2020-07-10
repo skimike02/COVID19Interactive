@@ -16,13 +16,12 @@ from bokeh.transform import factor_cmap
 import itertools
 from datetime import timedelta
 import math
+import config
 
-
-output_file("COVID.html")
+fileloc=config.fileloc
 
 state='CA'
 counties=['Sacramento','El Dorado','Placer','Yolo']
-fileloc=r'C:\\Users\Micha\Documents\GitHub\COVID19Interactive'
 
 #Tests and National Stats
 print("Getting national statistics...")
