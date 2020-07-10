@@ -168,8 +168,7 @@ l=gridplot(
          [state_deaths]]
         )
 
-save(l,filename=fileloc+'\COVID19_National.html')
-show(l)
+save(l,filename=fileloc+'\COVID19_National.html',title='National')
 
 #%% ICU 
 source = ColumnDataSource(caData.groupby('Date').sum())
@@ -190,8 +189,7 @@ p.yaxis.formatter=NumeralTickFormatter(format="0,")
 
 p.legend.location = "top_left"
 
-save(p,filename=fileloc+'\COVID19_State.html')
-show(p)
+save(p,filename=fileloc+'\COVID19_State.html',title='State')
 
 #%% County Gridplot
 
@@ -258,6 +256,5 @@ def countychart(county):
     return layout(cases,deaths,ICU)
 
 
-save(row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo')),filename=fileloc+'\COVID19_Counties.html')
-show(row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo')))
+save(row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo')),filename=fileloc+'\COVID19_Counties.html',title='Counties')
 
