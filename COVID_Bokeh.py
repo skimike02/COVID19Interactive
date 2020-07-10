@@ -130,6 +130,10 @@ header="""<div class="header">
     <li><a href="/CAISOData.html">CAISO Data</a></li> 
     <li><a href="/CCAMap">CCA Service Territory</a></li> 
   </ul> 
+  <link rel="icon" 
+      type="image/png" 
+      href="https://www.michaelchamp.com/assets/logo.png">
+ <link rel="stylesheet" href="styles.css">
 </div>"""
 
 footer="""<div class="footer"> 
