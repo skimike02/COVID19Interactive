@@ -126,9 +126,9 @@ charts=['Tests','Cases','Deaths']
 header="""<div class="header"> 
   <h1>A selection of tools</h1> 
   <ul class="navigation"> 
-    <li><a href="index.html">Home</a></li> 
-    <li><a href="CAISOData.html">CAISO Data</a></li> 
-    <li><a href="CCAMap">CCA Service Territory</a></li> 
+    <li><a href="/index.html">Home</a></li> 
+    <li><a href="/CAISOData.html">CAISO Data</a></li> 
+    <li><a href="/CCAMap">CCA Service Territory</a></li> 
   </ul> 
 </div>"""
 
@@ -231,9 +231,9 @@ statecharts=layout([Div(text=header)],
                    [Div(text=footer)])
 
 if mode=='dev':
-    show(p)
+    show(statecharts)
 if mode=='prod':
-    save(p,filename=fileloc+'COVID19_State.html',title='State')
+    save(statecharts,filename=fileloc+'COVID19_State.html',title='State')
 
 #%% Counties
 
