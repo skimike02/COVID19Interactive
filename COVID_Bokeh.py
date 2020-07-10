@@ -123,20 +123,20 @@ for field in fields:
 regions=['US',state]
 charts=['Tests','Cases','Deaths']
 
-header=Div(text="""<div class="header"> 
+header="""<div class="header"> 
   <h1>A selection of tools</h1> 
   <ul class="navigation"> 
     <li><a href="index.html">Home</a></li> 
     <li><a href="CAISOData.html">CAISO Data</a></li> 
     <li><a href="CCAMap">CCA Service Territory</a></li> 
   </ul> 
-</div>""")
+</div>"""
 
-footer=Div(text="""<div class="footer"> 
+footer="""<div class="footer"> 
   <p>&copy; 2018
     <script>new Date().getFullYear()>2010&&document.write("-"+new Date().getFullYear());</script>
     , Michael Champ</p>
-</div>""")
+</div>"""
 
 #%%
 
@@ -194,12 +194,12 @@ state_deaths.x_range=state_cases.x_range
 positivity.x_range=state_cases.x_range
 
 l=layout(
-        [[header],
+        [[Div(text=header)],
          [state_cases],
          [state_hospitalizations],
          [state_deaths],
          [positivity],
-         [footer]]
+         [Div(text=footer)]]
         )
 
 if mode=='dev':
@@ -226,9 +226,9 @@ p.yaxis.formatter=NumeralTickFormatter(format="0,")
 
 p.legend.location = "top_left"
 
-statecharts=layout([header],
+statecharts=layout([Div(text=header)],
                    [p],
-                   [footer])
+                   [Div(text=footer)])
 
 if mode=='dev':
     show(p)
@@ -299,9 +299,10 @@ def countychart(county):
     ICU.x_range=cases.x_range
     return layout(cases,deaths,ICU)
 
-countypage=layout([header],
+countypage=layout([Div(text=header)],
                   [row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'))],
-                  [footer])
+                  [Div(text=footer)]
+                  )
 
 if mode=='dev':
     show(countypage)
