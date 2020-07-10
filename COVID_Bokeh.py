@@ -1,15 +1,25 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue Jun 23 09:00:48 2020
-
 @author: Micha
+
+To do:
+    Make nav bar
+    State Comaprison
+        Add percap to national
+        limit to floor of zero
+        make scroll active by default
+        Scale deaths to exclude NY/NJ at start
+        Add positivity rate by state
+    Make chloropleths
+    
 """
 
 import pandas as pd
 from bs4 import BeautifulSoup as bs
 import requests as r
 from bokeh.plotting import figure, output_file, show, save
-from bokeh.models import NumeralTickFormatter,ColumnDataSource,CDSView,GroupFilter,HoverTool, Range1d
+from bokeh.models import NumeralTickFormatter,ColumnDataSource,CDSView,GroupFilter,HoverTool, Range1d,Div
 from bokeh.layouts import layout,gridplot,row
 from bokeh.palettes import Category20
 from bokeh.transform import factor_cmap
@@ -19,6 +29,8 @@ import math
 import config
 
 fileloc=config.fileloc
+mode=config.mode
+base_url=config.base_url
 
 state='CA'
 counties=['Sacramento','El Dorado','Placer','Yolo']
@@ -41,12 +53,7 @@ fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
 for field in fields:
     df=rolling_7_avg(df,'Date','state',field)
 
-#CA and County Stats
-#print("Getting California county statistics...")
-#url='https://data.chhs.ca.gov/dataset/6882c390-b2d7-4b9a-aefa-2068cee63e47/resource/6cd8d424-dfaa-4bdd-9410-a3d656e1176e/download/covid19data.csv'
-#dfca=pd.read_csv(url,delimiter=',')
-#dfca['Date']=pd.to_datetime(dfca['Most Recent Date'], format='%m/%d/%Y')
-#dfca['county']=dfca['County Name'].str.upper()
+df['positivity']=df.positiveIncrease_avg/df.totalTestResultsIncrease_avg
 
 #CA Data
 url='https://data.ca.gov/dataset/590188d5-8545-4c93-a9a0-e230f0db7290/resource/926fd08f-cc91-4828-af38-bd45de97f8c3/download/statewide_cases.csv'
@@ -116,6 +123,21 @@ for field in fields:
 regions=['US',state]
 charts=['Tests','Cases','Deaths']
 
+header=Div(text="""<div class="header"> 
+  <h1>A selection of tools</h1> 
+  <ul class="navigation"> 
+    <li><a href="index.html">Home</a></li> 
+    <li><a href="CAISOData.html">CAISO Data</a></li> 
+    <li><a href="CCAMap">CCA Service Territory</a></li> 
+  </ul> 
+</div>""")
+
+footer=Div(text="""<div class="footer"> 
+  <p>&copy; 2018
+    <script>new Date().getFullYear()>2010&&document.write("-"+new Date().getFullYear());</script>
+    , Michael Champ</p>
+</div>""")
+
 #%%
 
 #All states in one chart
@@ -123,7 +145,10 @@ def statecompare(metric,metricname,foci):
     palette=Category20[20]
     colors = itertools.cycle(palette)
     p = figure(title=metricname, x_axis_type='datetime', plot_width=800, plot_height=500,
-               tools="pan,wheel_zoom,reset,save")
+               tools="pan,wheel_zoom,reset,save",
+                y_range=Range1d(0,math.ceil(df[metric].max()*1.05/10)*10, bounds=(0,math.ceil(df[metric].max()*1.5/10)*10)),
+                active_scroll='wheel_zoom',
+                )
     grp_list = df.groupby('state').max().positive.nlargest(15).index.sort_values()
     lines={}
     for i,color in zip(range(len(grp_list)),colors):
@@ -155,22 +180,34 @@ def statecompare(metric,metricname,foci):
     return p
 
 foci=['CA','AZ','FL','GA','TX','NC','LA']
+
 state_cases=statecompare('positiveIncrease_avg','New Cases (7-day avg)',foci)
 state_hospitalizations=statecompare('hospitalizedCurrently','Hospitalized',foci)
 state_deaths=statecompare('deathIncrease_avg','Deaths (7-day avg)',foci)
+positivity=statecompare('positivity','Positivity (7-day avg)',foci)
+
+positivity.y_range=Range1d(0,1,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
+positivity.yaxis.formatter=NumeralTickFormatter(format="0%")
 
 state_hospitalizations.x_range=state_cases.x_range
 state_deaths.x_range=state_cases.x_range
+positivity.x_range=state_cases.x_range
 
-l=gridplot(
-        [[state_cases],
+l=layout(
+        [[header],
+         [state_cases],
          [state_hospitalizations],
-         [state_deaths]]
+         [state_deaths],
+         [positivity],
+         [footer]]
         )
 
-save(l,filename=fileloc+'COVID19_National.html',title='National')
+if mode=='dev':
+    show(l)
+if mode=='prod':
+    save(l,filename=fileloc+'COVID19_National.html',title='National')
 
-#%% ICU 
+#%% State 
 source = ColumnDataSource(caData.groupby('Date').sum())
 p = figure(x_axis_type='datetime',
            plot_height=400,
@@ -189,9 +226,16 @@ p.yaxis.formatter=NumeralTickFormatter(format="0,")
 
 p.legend.location = "top_left"
 
-save(p,filename=fileloc+'COVID19_State.html',title='State')
+statecharts=layout([header],
+                   [p],
+                   [footer])
 
-#%% County Gridplot
+if mode=='dev':
+    show(p)
+if mode=='prod':
+    save(p,filename=fileloc+'COVID19_State.html',title='State')
+
+#%% Counties
 
 def countychart(county):
     source=ColumnDataSource(caData[caData.County==county].groupby('Date').sum())
@@ -255,6 +299,11 @@ def countychart(county):
     ICU.x_range=cases.x_range
     return layout(cases,deaths,ICU)
 
+countypage=layout([header],
+                  [row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'))],
+                  [footer])
 
-save(row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo')),filename=fileloc+'COVID19_Counties.html',title='Counties')
-
+if mode=='dev':
+    show(countypage)
+if mode=='prod':
+    save(countypage,filename=fileloc+'COVID19_Counties.html',title='Counties')
