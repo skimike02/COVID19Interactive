@@ -19,8 +19,8 @@ import pandas as pd
 from bs4 import BeautifulSoup as bs
 import requests as r
 from bokeh.plotting import figure, output_file, show, save
-from bokeh.models import NumeralTickFormatter,ColumnDataSource,CDSView,GroupFilter,HoverTool, Range1d,Div
-from bokeh.layouts import layout,gridplot,row
+from bokeh.models import NumeralTickFormatter,ColumnDataSource,CDSView,GroupFilter,HoverTool, Range1d,Div,Panel,Tabs
+from bokeh.layouts import layout,gridplot,row,column
 from bokeh.palettes import Category20
 from bokeh.transform import factor_cmap
 import itertools
@@ -123,8 +123,8 @@ for field in fields:
 regions=['US',state]
 charts=['Tests','Cases','Deaths']
 
-header="""<div class="header"> 
-  <h1>A selection of tools</h1> 
+header=""" 
+  <h1 style: {width: 100%}>A selection of tools</h1> 
   <ul class="navigation"> 
     <li><a href="/index.html">Home</a></li> 
     <li><a href="/CAISOData.html">CAISO Data</a></li> 
@@ -134,7 +134,7 @@ header="""<div class="header">
       type="image/png" 
       href="https://www.michaelchamp.com/assets/logo.png">
  <link rel="stylesheet" href="styles.css">
-</div>"""
+"""
 
 footer="""<div class="footer"> 
   <p>&copy; 2018
@@ -142,13 +142,13 @@ footer="""<div class="footer">
     , Michael Champ</p>
 </div>"""
 
-#%%
+#%% National
 
 #All states in one chart
 def statecompare(metric,metricname,foci):
     palette=Category20[20]
     colors = itertools.cycle(palette)
-    p = figure(title=metricname, x_axis_type='datetime', plot_width=800, plot_height=500,
+    p = figure(title=metricname, x_axis_type='datetime', plot_width=780, plot_height=450,
                tools="pan,wheel_zoom,reset,save",
                 y_range=Range1d(0,math.ceil(df[metric].max()*1.05/10)*10, bounds=(0,math.ceil(df[metric].max()*1.5/10)*10)),
                 active_scroll='wheel_zoom',
@@ -197,19 +197,12 @@ state_hospitalizations.x_range=state_cases.x_range
 state_deaths.x_range=state_cases.x_range
 positivity.x_range=state_cases.x_range
 
-l=layout(
-        [[Div(text=header)],
-         [state_cases],
-         [state_hospitalizations],
-         [state_deaths],
-         [positivity],
-         [Div(text=footer)]]
-        )
-
-if mode=='dev':
-    show(l)
-if mode=='prod':
-    save(l,filename=fileloc+'COVID19_National.html',title='National')
+nationalcharts=Panel(child=
+                         layout([[state_cases],[positivity]],
+                         [[state_hospitalizations],[state_deaths]],
+                         sizing_mode='stretch_width'
+                         ),
+                     title='National')
 
 #%% State 
 source = ColumnDataSource(caData.groupby('Date').sum())
@@ -230,14 +223,10 @@ p.yaxis.formatter=NumeralTickFormatter(format="0,")
 
 p.legend.location = "top_left"
 
-statecharts=layout([Div(text=header)],
-                   [p],
-                   [Div(text=footer)])
-
-if mode=='dev':
-    show(statecharts)
-if mode=='prod':
-    save(statecharts,filename=fileloc+'COVID19_State.html',title='State')
+statecharts=Panel(child=
+                      layout([Div(text=header)],
+                      [p]),
+                      title='California')
 
 #%% Counties
 
@@ -303,12 +292,16 @@ def countychart(county):
     ICU.x_range=cases.x_range
     return layout(cases,deaths,ICU)
 
-countypage=layout([Div(text=header)],
-                  [row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'))],
-                  [Div(text=footer)]
-                  )
+countycharts=Panel(child=
+                       layout(
+                       [row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'))]
+                       ),
+                   title='Region'
+                )
+tabs = Tabs(tabs=[nationalcharts, statecharts, countycharts])
+
 
 if mode=='dev':
-    show(countypage)
+    show(tabs)
 if mode=='prod':
-    save(countypage,filename=fileloc+'COVID19_Counties.html',title='Counties')
+    save(tabs,filename=fileloc+'COVID19.html',title='COVI19')
