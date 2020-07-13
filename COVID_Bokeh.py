@@ -4,29 +4,27 @@ Created on Tue Jun 23 09:00:48 2020
 @author: Micha
 
 To do:
-    Make nav bar
-    State Comaprison
+    State Comparison
         Add percap to national
-        limit to floor of zero
-        make scroll active by default
         Scale deaths to exclude NY/NJ at start
-        Add positivity rate by state
+        Fix positivity mousover formatting
     Make chloropleths
-    
+    Add State of CA overall charts
 """
-
+#%% Config
 import pandas as pd
 from bs4 import BeautifulSoup as bs
 import requests as r
-from bokeh.plotting import figure, output_file, show, save
-from bokeh.models import NumeralTickFormatter,ColumnDataSource,CDSView,GroupFilter,HoverTool, Range1d,Div,Panel,Tabs
-from bokeh.layouts import layout,gridplot,row,column
+from bokeh.plotting import figure, show, save
+from bokeh.models import NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs
+from bokeh.layouts import layout,row,Spacer
 from bokeh.palettes import Category20
-from bokeh.transform import factor_cmap
 import itertools
 from datetime import timedelta
 import math
 import config
+from bs4 import BeautifulSoup as Soup
+
 
 fileloc=config.fileloc
 mode=config.mode
@@ -34,7 +32,7 @@ base_url=config.base_url
 
 state='CA'
 counties=['Sacramento','El Dorado','Placer','Yolo']
-
+#%% Data Imports
 #Tests and National Stats
 print("Getting national statistics...")
 url='https://covidtracking.com/api/v1/states/daily.json'
@@ -123,35 +121,17 @@ for field in fields:
 regions=['US',state]
 charts=['Tests','Cases','Deaths']
 
-header=""" 
-  <h1 style: {width: 100%}>A selection of tools</h1> 
-  <ul class="navigation"> 
-    <li><a href="/index.html">Home</a></li> 
-    <li><a href="/CAISOData.html">CAISO Data</a></li> 
-    <li><a href="/CCAMap">CCA Service Territory</a></li> 
-  </ul> 
-  <link rel="icon" 
-      type="image/png" 
-      href="https://www.michaelchamp.com/assets/logo.png">
- <link rel="stylesheet" href="styles.css">
-"""
-
-footer="""<div class="footer"> 
-  <p>&copy; 2018
-    <script>new Date().getFullYear()>2010&&document.write("-"+new Date().getFullYear());</script>
-    , Michael Champ</p>
-</div>"""
-
 #%% National
 
 #All states in one chart
 def statecompare(metric,metricname,foci):
     palette=Category20[20]
     colors = itertools.cycle(palette)
-    p = figure(title=metricname, x_axis_type='datetime', plot_width=780, plot_height=450,
+    p = figure(title=metricname, x_axis_type='datetime', plot_width=200, plot_height=400,
                tools="pan,wheel_zoom,reset,save",
                 y_range=Range1d(0,math.ceil(df[metric].max()*1.05/10)*10, bounds=(0,math.ceil(df[metric].max()*1.5/10)*10)),
                 active_scroll='wheel_zoom',
+                sizing_mode='stretch_width'
                 )
     grp_list = df.groupby('state').max().positive.nlargest(15).index.sort_values()
     lines={}
@@ -181,7 +161,9 @@ def statecompare(metric,metricname,foci):
     p.legend.location = "top_left"
     p.legend.click_policy="mute"
     p.legend.label_text_font_size="8pt"
-    return p
+    padding=Spacer(width=30, height=10, sizing_mode='fixed')
+
+    return row([p,padding])
 
 foci=['CA','AZ','FL','GA','TX','NC','LA']
 
@@ -190,19 +172,19 @@ state_hospitalizations=statecompare('hospitalizedCurrently','Hospitalized',foci)
 state_deaths=statecompare('deathIncrease_avg','Deaths (7-day avg)',foci)
 positivity=statecompare('positivity','Positivity (7-day avg)',foci)
 
-positivity.y_range=Range1d(0,1,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
-positivity.yaxis.formatter=NumeralTickFormatter(format="0%")
+positivity.children[0].y_range=Range1d(0,1,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
+positivity.children[0].yaxis.formatter=NumeralTickFormatter(format="0%")
 
-state_hospitalizations.x_range=state_cases.x_range
-state_deaths.x_range=state_cases.x_range
-positivity.x_range=state_cases.x_range
+state_hospitalizations.children[0].x_range=state_cases.children[0].x_range
+state_deaths.children[0].x_range=state_cases.children[0].x_range
+positivity.children[0].x_range=state_cases.children[0].x_range
 
 nationalcharts=Panel(child=
-                         layout([[state_cases],[positivity]],
-                         [[state_hospitalizations],[state_deaths]],
-                         sizing_mode='stretch_width'
+                         layout([[state_cases,positivity],[state_hospitalizations,state_deaths]],
+                         sizing_mode='stretch_width',
                          ),
                      title='National')
+
 
 #%% State 
 source = ColumnDataSource(caData.groupby('Date').sum())
@@ -224,20 +206,24 @@ p.yaxis.formatter=NumeralTickFormatter(format="0,")
 p.legend.location = "top_left"
 
 statecharts=Panel(child=
-                      layout([Div(text=header)],
-                      [p]),
+                      layout(
+                          [p],
+                          sizing_mode='stretch_width'),
                       title='California')
+
+
 
 #%% Counties
 
 def countychart(county):
     source=ColumnDataSource(caData[caData.County==county].groupby('Date').sum())
     cases = figure(x_axis_type='datetime',
-                   x_range=Range1d(caData.Date.min(),caData.Date.max(),bounds=(caData.Date.min(),caData.Date.max())),
+                   x_range=Range1d(caData.Date.min(),caData.Date.max(),bounds=(caData.Date.min()-timedelta(days=5),caData.Date.max()+timedelta(days=5))),
                    y_range=Range1d(0,math.ceil(caData[caData.County.isin(counties)].positiveIncrease_percap.max()*1.05/10)*10, bounds=(0,math.ceil(caData[caData.County.isin(counties)].positiveIncrease_percap.max()*10))),
                    title=county,
                    plot_height=300,
-                   plot_width=450,
+                   plot_width=100,
+                   sizing_mode='stretch_width',
                    toolbar_location='above',
                    tools=["pan,reset,save,wheel_zoom",HoverTool(tooltips=[
                    ('Date','@Date{%F}'),
@@ -245,8 +231,7 @@ def countychart(county):
                    ('7-day average New Cases','@positiveIncrease_avg{0,}')
                    ],
                    formatters={'@Date': 'datetime'})],
-                   active_scroll='wheel_zoom',
-                   sizing_mode = 'scale_width')       
+                   active_scroll='wheel_zoom')       
     cases.line(x='Date', y='positiveIncrease_percap', source=source, color='grey',legend_label='Daily')
     cases.line(x='Date', y='positiveIncrease_avg_percap', source=source, color='blue',width=2, legend_label='7-day average')
     cases.legend.location = "top_left"
@@ -255,7 +240,7 @@ def countychart(county):
     deaths = figure(x_axis_type='datetime',
                     y_range=Range1d(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*1.05/10)*10, bounds=(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*10))),
                    plot_height=300,
-                   plot_width=450,
+                   plot_width=cases.width,
                    toolbar_location='above',
                    tools=["pan,reset,save,xwheel_zoom",HoverTool(tooltips=[
                    ('Date','@Date{%F}'),
@@ -273,7 +258,7 @@ def countychart(county):
     ICU = figure(x_axis_type='datetime',
                  y_range=Range1d(0,caData[caData.County==county].ICU_capacity.max(), bounds=(0,caData[caData.County==county].ICU_capacity.max())),
                plot_height=300,
-               plot_width=450,
+               plot_width=cases.width,
                toolbar_location='above',
                tools=["save",HoverTool(tooltips=[
                    ('Date','@Date{%F}'),
@@ -290,18 +275,53 @@ def countychart(county):
     
     deaths.x_range=cases.x_range
     ICU.x_range=cases.x_range
-    return layout(cases,deaths,ICU)
+    return layout([[cases],[deaths],[ICU]],sizing_mode='stretch_width')
 
 countycharts=Panel(child=
                        layout(
-                       [row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'))]
+                       [row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'))],
+                       sizing_mode='stretch_width'
                        ),
                    title='Region'
                 )
-tabs = Tabs(tabs=[nationalcharts, statecharts, countycharts])
 
+#%% HTML Generation
+page=Tabs(tabs=[nationalcharts,statecharts,countycharts])
 
+mode='prod'
 if mode=='dev':
     show(tabs)
 if mode=='prod':
-    save(tabs,filename=fileloc+'COVID19.html',title='COVI19')
+    save(page,filename=fileloc+'COVID19.html',title='COVID19')
+
+header=Soup("""
+<div class="header">
+  <h1 style: {width: 100%}>A selection of tools</h1> 
+  <ul class="navigation"> 
+    <li><a href="/index.html">Home</a></li> 
+    <li><a href="/CAISOData.html">CAISO Data</a></li> 
+    <li><a href="/CCAMap">CCA Service Territory</a></li>
+    <li><a href="COVID19.html">COVID-19 Data</a></li>
+  </ul> 
+  <link rel="icon" 
+      type="image/png" 
+      href="https://www.michaelchamp.com/assets/logo.png">
+ <link rel="stylesheet" href="styles.css">
+ </div>
+""",features='lxml')
+
+footer=Soup("""<div class="footer"> 
+  <p>&copy; 2020
+    <script>new Date().getFullYear()>2010&&document.write("-"+new Date().getFullYear());</script>
+    , Michael Champ</p>
+</div>""",features='lxml')
+    
+#Insert script to add custom html header and footer
+htmlfile = open(fileloc+'COVID19.html', "r").read()
+soup=Soup(htmlfile,features="lxml")
+
+soup.find('title').insert_after(header.body.div)
+soup.find('body').insert_after(footer.body.div)
+
+f = open(fileloc+'COVID19.html', "w")
+f.write(str(soup).replace('©','&copy;'))
