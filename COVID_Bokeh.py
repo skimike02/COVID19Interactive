@@ -318,7 +318,7 @@ footer=Soup("""<div class="footer">
     
 #Insert script to add custom html header and footer
 htmlfile = open(fileloc+'COVID19.html', "r").read()
-soup=Soup(htmlfile,features="lxml")
+soup=Soup(htmlfile,"lxml")
 
 soup.find('title').insert_after(header.body.div)
 soup.find('body').insert_after(footer.body.div)
