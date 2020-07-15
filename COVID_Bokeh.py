@@ -4,12 +4,10 @@ Created on Tue Jun 23 09:00:48 2020
 @author: Micha
 
 To do:
+    Add State of CA overall charts (testing, positivity, cases, hospitalizations, deaths)
     State Comparison
-        Add percap to national
-        Scale deaths to exclude NY/NJ at start
-        Fix positivity mousover formatting
+        add percap tab to national charts (where applicable)
     Make chloropleths
-    Add State of CA overall charts
 """
 #%% Config
 import pandas as pd
@@ -22,9 +20,11 @@ from bokeh.palettes import Category20
 import itertools
 from datetime import timedelta
 import math
-import config
 from bs4 import BeautifulSoup as Soup
+import requests
+import json
 
+import config
 
 fileloc=config.fileloc
 mode=config.mode
@@ -39,6 +39,10 @@ url='https://covidtracking.com/api/v1/states/daily.json'
 df=pd.read_json(url)
 df['Date']=pd.to_datetime(df.date, format='%Y%m%d', errors='ignore')
 df=df[df['Date']>='2020-03-15']
+
+url="https://gist.githubusercontent.com/mshafrir/2646763/raw/8b0dbb93521f5d6889502305335104218454c2bf/states_hash.json"
+state_mapping=json.loads(requests.get(url).content)
+df.state_name=df.state.map(state_mapping)
 
 def rolling_7_avg(df,date,group,field):
     newname=field+'_avg'
@@ -174,9 +178,11 @@ positivity=statecompare('positivity','Positivity (7-day avg)',foci)
 
 positivity.children[0].y_range=Range1d(0,1,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
 positivity.children[0].yaxis.formatter=NumeralTickFormatter(format="0%")
+positivity.children[0].hover._property_values['tooltips'][2]=('Positivity (7-day avg)', '@positivity{0.0%}')
 
 state_hospitalizations.children[0].x_range=state_cases.children[0].x_range
 state_deaths.children[0].x_range=state_cases.children[0].x_range
+state_deaths.children[0].y_range=Range1d(0,math.ceil(df[~df.state.isin(['NY','NJ'])].deathIncrease_avg.max()*1.05/10)*10, bounds=(0,math.ceil(df.deathIncrease_avg.max()*1.5/10)*10))
 positivity.children[0].x_range=state_cases.children[0].x_range
 
 nationalcharts=Panel(child=
@@ -187,8 +193,8 @@ nationalcharts=Panel(child=
 
 
 #%% State 
-source = ColumnDataSource(caData.groupby('Date').sum())
-p = figure(x_axis_type='datetime',
+casource = ColumnDataSource(caData.groupby('Date').sum())
+icu = figure(x_axis_type='datetime',
            plot_height=400,
            title="CA ICU Capacity",
            toolbar_location='above',
@@ -198,20 +204,61 @@ p = figure(x_axis_type='datetime',
                ],
                formatters={'@Date': 'datetime'})]
         )
-
-p.varea_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', color=['red','yellow','green'], source=source,
+icu.varea_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', color=['red','yellow','green'], source=casource,
               legend_label=['COVID Cases','Non-COVID Cases','Available Beds'])
-p.yaxis.formatter=NumeralTickFormatter(format="0,")
+icu.yaxis.formatter=NumeralTickFormatter(format="0,")
+icu.legend.location = "top_left"
 
-p.legend.location = "top_left"
+source = ColumnDataSource(df[df.state=='CA'])
+tests=figure(x_axis_type='datetime',
+           plot_height=400,
+           title="Tests",
+           toolbar_location='above',
+           tools=[HoverTool(tooltips=[
+               ('Date','@Date{%F}'),
+               ('Average','@totalTestResultsIncrease_avg{0,}'),
+               ('Daily','@totalTestResultsIncrease{0,}'),
+               ],
+               formatters={'@Date': 'datetime'})]
+        )
+tests.line(x='Date', y='totalTestResultsIncrease', source=source, color='grey')
+tests.line(x='Date', y='totalTestResultsIncrease_avg', source=source, color='blue')
+tests.yaxis.formatter=NumeralTickFormatter(format="0,")
+
+cases=figure(x_axis_type='datetime',
+           plot_height=400,
+           title="Cases",
+           toolbar_location='above',
+           tools=[HoverTool(tooltips=[
+               ('Date','@Date{%F}'),
+               ('Average','@positiveIncrease_avg{0,}'),
+               ('Daily','@positiveIncrease{0,}'),
+               ],
+               formatters={'@Date': 'datetime'})]
+        )
+cases.line(x='Date', y='positiveIncrease', source=source, color='grey')
+cases.line(x='Date', y='positiveIncrease_avg', source=source, color='blue')
+cases.yaxis.formatter=NumeralTickFormatter(format="0,")
+
+deaths=figure(x_axis_type='datetime',
+           plot_height=400,
+           title="Deaths",
+           toolbar_location='above',
+           tools=[HoverTool(tooltips=[
+               ('Date','@Date{%F}'),
+               ('Average','@deathIncrease_avg{0,}'),
+               ('Daily','@deathIncrease{0,}'),
+               ],
+               formatters={'@Date': 'datetime'})]
+        )
+deaths.line(x='Date', y='deathIncrease', source=source, color='grey')
+deaths.line(x='Date', y='deathIncrease_avg', source=source, color='blue')
+deaths.yaxis.formatter=NumeralTickFormatter(format="0,")
 
 statecharts=Panel(child=
-                      layout(
-                          [p],
+                      layout([row([tests,cases,deaths]),icu],
                           sizing_mode='stretch_width'),
                       title='California')
-
-
 
 #%% Counties
 
@@ -290,7 +337,7 @@ page=Tabs(tabs=[nationalcharts,statecharts,countycharts])
 
 mode='prod'
 if mode=='dev':
-    show(tabs)
+    show(page)
 if mode=='prod':
     save(page,filename=fileloc+'COVID19.html',title='COVID19')
 
@@ -315,6 +362,16 @@ footer=Soup("""<div class="footer">
     <script>new Date().getFullYear()>2010&&document.write("-"+new Date().getFullYear());</script>
     , Michael Champ</p>
 </div>""",features='lxml')
+
+tracker=Soup("""<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-134772498-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-134772498-1');
+</script>""",features='lxml')
     
 #Insert script to add custom html header and footer
 htmlfile = open(fileloc+'COVID19.html', "r").read()
@@ -322,6 +379,8 @@ soup=Soup(htmlfile,"lxml")
 
 soup.find('title').insert_after(header.body.div)
 soup.find('body').insert_after(footer.body.div)
+soup.find('title').insert_before(tracker.head.contents[0])
+soup.find('title').insert_before(tracker.head.contents[2])
 
 f = open(fileloc+'COVID19.html', "w")
 f.write(str(soup).replace('©','&copy;'))
