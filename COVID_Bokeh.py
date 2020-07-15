@@ -316,9 +316,31 @@ countycharts=Panel(child=
 
 #%% HTML Generation
 about_html="""
+<p><b>Data Sources and Documentation</b></p>
 <p>Source data and documentation available at <a href="https://github.com/skimike02/COVID19Interactive">https://github.com/skimike02/COVID19Interactive</a></p>
 <p>National and state data pulled from the <a href="https://covidtracking.com/">COVID Tracking Project</a>, a product of the Atlantic.</p>
 <p>CA State and County level data pulled from the <a href="https://data.ca.gov/group/covid-19">CA Open Data Portal</a></p>
+<br>
+<b>Additional Resources:</b><br>
+Official Sites:<br>
+<a href="https://www.saccounty.net/COVID-19/Pages/default.aspx">Sacramento County page, including current Public Health Order</a><br>
+<a href="https://covid19.ca.gov">CA Main Page</a><br>
+<a href="https://www.cdc.gov/coronavirus/2019-ncov/index.html">CDC Main Page</a><br>
+<br>Models:<br>
+<a href="https://calcat.covid19.ca.gov/cacovidmodels/">Official CA Model</a><br>
+<a href="https://www.covid-projections.com/">Historical comparison of models</a><br>
+<a href="https://covid19-projections.com/us-ca">A forecast model</a><br>
+<a href="https://epiforecasts.io/covid/posts/national/united-states/">Epiforecasts model</a><br>
+<a href="https://rt.live/">Estimator of R</a><br>
+<br>Vaccines:<br>
+<a href="https://www.nytimes.com/interactive/2020/science/coronavirus-vaccine-tracker.html">NYT Vaccine Tracker</a><br>
+<a href="https://www.raps.org/news-and-articles/news-articles/2020/3/covid-19-vaccine-tracker">RAPS Vaccine Tracker</a><br>
+<br>Economic Impacts:<br>
+<a href="https://tracktherecovery.org/">Opportunity Insights Tracker</a><br>
+<a href="https://help.cuebiq.com/hc/en-us/articles/360041285051-Reading-Cuebiq-s-COVID-19-Mobility-Insights">Cuebiq Mobility Tracker</a><br>
+<a href="https://www.jpmorgan.com/global/research">Credit Card Spending</a><br>
+<a href="https://www.opentable.com/state-of-industry">OpenTables Reservations</a><br>
+<a href="https://www.tsa.gov/coronavirus/passenger-throughput">Flight Volumes</a><br>
 """
 about=Panel(child=Div(text=about_html),title='About')
 
@@ -339,10 +361,11 @@ header=Soup("""
     <li><a href="/CAISOData.html">CAISO Data</a></li> 
     <li><a href="/CCAMap">CCA Service Territory</a></li>
     <li><a href="COVID19.html">COVID-19 Data</a></li>
+    <li><a href="https://teslaconnect.michaelchamp.com">TeslaConnect/a></li>
   </ul> 
   <link rel="icon" 
       type="image/png" 
-      href="https://www.michaelchamp.com/assets/logo.png">
+      href="https://michaelchamp.com/assets/logo.png">
  <link rel="stylesheet" href="styles.css">
  </div>
 """,features='lxml')
