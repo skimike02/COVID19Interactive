@@ -14,7 +14,7 @@ import pandas as pd
 from bs4 import BeautifulSoup as bs
 import requests as r
 from bokeh.plotting import figure, show, save
-from bokeh.models import NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs
+from bokeh.models import NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs,Div
 from bokeh.layouts import layout,row,Spacer
 from bokeh.palettes import Category20
 import itertools
@@ -196,6 +196,7 @@ nationalcharts=Panel(child=
 casource = ColumnDataSource(caData.groupby('Date').sum())
 icu = figure(x_axis_type='datetime',
            plot_height=400,
+           sizing_mode='stretch_width',
            title="CA ICU Capacity",
            toolbar_location='above',
            tools=[HoverTool(tooltips=[
@@ -210,54 +211,35 @@ icu.yaxis.formatter=NumeralTickFormatter(format="0,")
 icu.legend.location = "top_left"
 
 source = ColumnDataSource(df[df.state=='CA'])
-tests=figure(x_axis_type='datetime',
-           plot_height=400,
-           title="Tests",
-           toolbar_location='above',
-           tools=[HoverTool(tooltips=[
-               ('Date','@Date{%F}'),
-               ('Average','@totalTestResultsIncrease_avg{0,}'),
-               ('Daily','@totalTestResultsIncrease{0,}'),
-               ],
-               formatters={'@Date': 'datetime'})]
-        )
-tests.line(x='Date', y='totalTestResultsIncrease', source=source, color='grey')
-tests.line(x='Date', y='totalTestResultsIncrease_avg', source=source, color='blue')
-tests.yaxis.formatter=NumeralTickFormatter(format="0,")
 
-cases=figure(x_axis_type='datetime',
-           plot_height=400,
-           title="Cases",
-           toolbar_location='above',
-           tools=[HoverTool(tooltips=[
-               ('Date','@Date{%F}'),
-               ('Average','@positiveIncrease_avg{0,}'),
-               ('Daily','@positiveIncrease{0,}'),
-               ],
-               formatters={'@Date': 'datetime'})]
-        )
-cases.line(x='Date', y='positiveIncrease', source=source, color='grey')
-cases.line(x='Date', y='positiveIncrease_avg', source=source, color='blue')
-cases.yaxis.formatter=NumeralTickFormatter(format="0,")
+def statechart(metric,metricname):
+    p=figure(x_axis_type='datetime',
+               plot_height=400,
+               sizing_mode='stretch_width',
+               title=metricname,
+               toolbar_location='above',
+               tools=[HoverTool(tooltips=[
+                   ('Date','@Date{%F}'),
+                   ('Average '+metricname,'@'+metric+'_avg{0,}'),
+                   ('Daily '+metricname,'@'+metric+'{0,}'),
+                   ],
+                   formatters={'@Date': 'datetime'})]
+            )
+    p.line(x='Date', y=metric, source=source, color='grey',legend_label='Daily')
+    p.line(x='Date', y=metric+'_avg', source=source, color='blue',width=2, legend_label='7-day average')
+    p.yaxis.formatter=NumeralTickFormatter(format="0,")
+    p.legend.location = "top_left"
+    padding=Spacer(width=30, height=10, sizing_mode='fixed')
+    return(row([p,padding]))
 
-deaths=figure(x_axis_type='datetime',
-           plot_height=400,
-           title="Deaths",
-           toolbar_location='above',
-           tools=[HoverTool(tooltips=[
-               ('Date','@Date{%F}'),
-               ('Average','@deathIncrease_avg{0,}'),
-               ('Daily','@deathIncrease{0,}'),
-               ],
-               formatters={'@Date': 'datetime'})]
-        )
-deaths.line(x='Date', y='deathIncrease', source=source, color='grey')
-deaths.line(x='Date', y='deathIncrease_avg', source=source, color='blue')
-deaths.yaxis.formatter=NumeralTickFormatter(format="0,")
+tests=statechart('totalTestResultsIncrease','Tests')
+cases=statechart('positiveIncrease','Cases')
+deaths=statechart('deathIncrease','Deaths')
 
 statecharts=Panel(child=
-                      layout([row([tests,cases,deaths]),icu],
-                          sizing_mode='stretch_width'),
+                         layout([[tests,cases,deaths],[icu,Spacer(width=30, height=10, sizing_mode='fixed')]],
+                         sizing_mode='stretch_width',
+                         ),
                       title='California')
 
 #%% Counties
@@ -326,20 +308,28 @@ def countychart(county):
 
 countycharts=Panel(child=
                        layout(
-                       [row(countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'))],
+                       [[countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'),Spacer(width=30, height=10, sizing_mode='fixed')]],
                        sizing_mode='stretch_width'
                        ),
                    title='Region'
                 )
 
 #%% HTML Generation
-page=Tabs(tabs=[nationalcharts,statecharts,countycharts])
+about_html="""
+<p>Source data and documentation available at <a href="https://github.com/skimike02/COVID19Interactive">https://github.com/skimike02/COVID19Interactive</a></p>
+<p>National and state data pulled from the <a href="https://covidtracking.com/">COVID Tracking Project</a>, a product of the Atlantic.</p>
+<p>CA State and County level data pulled from the <a href="https://data.ca.gov/group/covid-19">CA Open Data Portal</a></p>
+"""
+about=Panel(child=Div(text=about_html),title='About')
+
+
+page=Tabs(tabs=[nationalcharts,statecharts,countycharts,about])
 
 mode='prod'
 if mode=='dev':
     show(page)
 if mode=='prod':
-    save(page,filename=fileloc+'COVID19.html',title='COVID19')
+    save(page,resources=None,filename=fileloc+'COVID19.html',title='COVID19')
 
 header=Soup("""
 <div class="header">
