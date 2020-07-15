@@ -5,6 +5,7 @@ Created on Tue Jun 23 09:00:48 2020
 
 To do:
     Add State of CA overall charts (positivity, hospitalizations)
+    Add mouseover to CA ICU charts
     Make chloropleths
 """
 #%% Config
@@ -194,10 +195,7 @@ positivity.y_range=Range1d(0,1,bounds=(0,math.ceil(df['positivity'].max()*1.05/1
 positivity.yaxis.formatter=NumeralTickFormatter(format="0%")
 positivity.hover._property_values['tooltips'][2]=('Positivity (7-day avg)', '@positivity{0.0%}')
 
-#state_hospitalizations.x_range=state_cases.x_range
-#state_deaths.x_range=state_cases.x_range
-#state_deaths.y_range=Range1d(0,math.ceil(df[~df.state.isin(['NY','NJ'])].deathIncrease_avg.max()*1.05/10)*10, bounds=(0,math.ceil(df.deathIncrease_avg.max()*1.5/10)*10))
-#positivity.x_range=state_cases.x_range
+state_deaths.tabs[0].child.y_range=Range1d(0,math.ceil(df[~df.state.isin(['NY','NJ'])].deathIncrease_avg.max()*1.05), bounds=(0,math.ceil(df.deathIncrease_avg.max()*1.5)))
 
 nationalcharts=Panel(child=
                          layout([[state_cases,positivity,padding],[state_hospitalizations,state_deaths,padding]],
@@ -205,24 +203,7 @@ nationalcharts=Panel(child=
                          ),
                      title='National')
 
-
 #%% State 
-casource = ColumnDataSource(caData.groupby('Date').sum())
-icu = figure(x_axis_type='datetime',
-           plot_height=400,
-           sizing_mode='stretch_width',
-           title="CA ICU Capacity",
-           toolbar_location='above',
-           tools=[HoverTool(tooltips=[
-               ('Date','@Date{%F}'),
-               ('ICU','@ICU{0,}')
-               ],
-               formatters={'@Date': 'datetime'})]
-        )
-icu.varea_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', color=['red','yellow','green'], source=casource,
-              legend_label=['COVID Cases','Non-COVID Cases','Available Beds'])
-icu.yaxis.formatter=NumeralTickFormatter(format="0,")
-icu.legend.location = "top_left"
 
 source = ColumnDataSource(df[df.state=='CA'])
 
@@ -250,8 +231,47 @@ tests=statechart('totalTestResultsIncrease','Tests')
 cases=statechart('positiveIncrease','Cases')
 deaths=statechart('deathIncrease','Deaths')
 
+#Hospitalizations
+ca=caData.groupby(['Date']).sum().sort_values(by=['Date'])
+ca=ca[ca.index>='2020-04-01']
+hospitalizations=figure(x_axis_type='datetime',
+               plot_height=400,
+               sizing_mode='stretch_width',
+               title='Hospitalizations',
+               toolbar_location='above',
+               tools=[HoverTool(tooltips=[
+                   ('Date','@Date{%F}'),
+                   ],
+                   formatters={'@Date': 'datetime'})]
+            )
+hospitalizations.varea_stack(['hospitalized_confirmed_nonICU','hospitalized_suspected_nonICU','icu_covid_confirmed_patients','icu_suspected_covid_patients'], x='Date', color=['green','yellow','orange','red'],
+                             legend_label=['Hospitalized Confirmed','Hospitalized Suspected','ICU Confirmed','ICU Suspected'],
+                             source=ColumnDataSource(ca))
+hospitalizations.yaxis.formatter=NumeralTickFormatter(format="0,")
+hospitalizations.legend.location = "top_left"
+
+#ICU
+casource = ColumnDataSource(caData.groupby('Date').sum())
+icu = figure(x_axis_type='datetime',
+           plot_height=400,
+           sizing_mode='stretch_width',
+           title="CA ICU Capacity",
+           toolbar_location='above',
+           tools=[HoverTool(tooltips=[
+               ('Date','@Date{%F}'),
+               ('ICU','@ICU{0,}')
+               ],
+               formatters={'@Date': 'datetime'})]
+        )
+icu.varea_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', color=['red','yellow','green'], source=casource,
+              legend_label=['COVID Cases','Non-COVID Cases','Available Beds'])
+icu.yaxis.formatter=NumeralTickFormatter(format="0,")
+icu.legend.location = "top_left"
+
+
+
 statecharts=Panel(child=
-                         layout([[tests,cases,deaths],[icu,Spacer(width=30, height=10, sizing_mode='fixed')]],
+                         layout([[tests,cases,deaths],[hospitalizations,icu,Spacer(width=30, height=10, sizing_mode='fixed')]],
                          sizing_mode='stretch_width',
                          ),
                       title='California')
