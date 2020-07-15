@@ -4,15 +4,11 @@ Created on Tue Jun 23 09:00:48 2020
 @author: Micha
 
 To do:
-    Add State of CA overall charts (testing, positivity, cases, hospitalizations, deaths)
-    State Comparison
-        add percap tab to national charts (where applicable)
+    Add State of CA overall charts (positivity, hospitalizations)
     Make chloropleths
 """
 #%% Config
 import pandas as pd
-from bs4 import BeautifulSoup as bs
-import requests as r
 from bokeh.plotting import figure, show, save
 from bokeh.models import NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs,Div
 from bokeh.layouts import layout,row,Spacer
@@ -42,7 +38,7 @@ df=df[df['Date']>='2020-03-15']
 
 url="https://gist.githubusercontent.com/mshafrir/2646763/raw/8b0dbb93521f5d6889502305335104218454c2bf/states_hash.json"
 state_mapping=json.loads(requests.get(url).content)
-df['state_name']=df.state.map(state_mapping)
+df['STATE']=df.state.map(state_mapping).str.upper()
 
 def rolling_7_avg(df,date,group,field):
     newname=field+'_avg'
@@ -84,13 +80,16 @@ caData=caData.merge(hospital_capacity,left_on='COUNTY', right_index=True, how='l
 print("Getting county populations...")
 url='https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/co-est2019-alldata.csv'
 df4=pd.read_csv(url,delimiter=',',encoding='latin-1')
+statepop=df4.groupby('STNAME').sum().POPESTIMATE2019.to_frame(name="pop")
+statepop['STATE']=statepop.index.str.upper()
+df=df.merge(statepop,how='left',on='STATE')
 df4=df4[(df4['STATE']==6)&(df4['COUNTY']>0)]
 df4['county']=df4['CTYNAME'].str.replace(' County','').str.upper()
 df4=df4[['county','POPESTIMATE2019']]
 caData=caData.merge(df4, left_on='COUNTY',right_on='county')
 caData.rename(columns={"POPESTIMATE2019": "pop"},inplace=True)
 
-#Accelerated Reopening
+"""#Accelerated Reopening
 print("Getting accelerated reopening plans...")
 url='https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/County_Variance_Attestation_Form.aspx'
 soup = bs(r.get(url).content, 'html.parser')
@@ -99,6 +98,7 @@ accel_counties=[]
 for item in list:
     for i in (item.findAll("a")[0].text.replace("County","").strip().split('-')):
         accel_counties.append(i)
+"""
 
 #County Data calculated fields
 caData['hospitalized_confirmed_nonICU']=(caData['hospitalized_covid_confirmed_patients']-caData['icu_covid_confirmed_patients']).clip(0)
@@ -122,6 +122,10 @@ fields=['positiveIncrease','deathIncrease','positiveIncrease_avg','deathIncrease
 for field in fields:
     caData[field+'_percap']=caData[field]/caData['pop']*100000
 
+fields=['totalTestResultsIncrease_avg','deathIncrease_avg','positiveIncrease_avg','hospitalizedCurrently']
+for field in fields:
+    df[field+'_percap']=df[field]/df['pop']*100000
+
 regions=['US',state]
 charts=['Tests','Cases','Deaths']
 
@@ -133,7 +137,7 @@ def statecompare(metric,metricname,foci):
     colors = itertools.cycle(palette)
     p = figure(title=metricname, x_axis_type='datetime', plot_width=200, plot_height=400,
                tools="pan,wheel_zoom,reset,save",
-                y_range=Range1d(0,math.ceil(df[metric].max()*1.05/10)*10, bounds=(0,math.ceil(df[metric].max()*1.5/10)*10)),
+                y_range=Range1d(0,math.ceil(df[metric].max()), bounds=(0,math.ceil(df[metric].max()*1.5/10)*10)),
                 active_scroll='wheel_zoom',
                 sizing_mode='stretch_width'
                 )
@@ -165,28 +169,38 @@ def statecompare(metric,metricname,foci):
     p.legend.location = "top_left"
     p.legend.click_policy="mute"
     p.legend.label_text_font_size="8pt"
-    padding=Spacer(width=30, height=10, sizing_mode='fixed')
 
-    return row([p,padding])
+    return p
+
+def percap(metric,metricname,foci):
+    gross=Panel(child=statecompare(metric,metricname,foci),title='Gross')
+    percap_chart=statecompare(metric+'_percap',metricname+' per 100k population',foci)
+    percap_chart.hover._property_values['tooltips'][2]=(metricname+' per 100k', '@'+metric+'_percap{0.0}')
+    percap_chart.yaxis.formatter=NumeralTickFormatter(format="0.0")
+    percap=Panel(child=percap_chart,title='Per 100k')
+    return Tabs(tabs=[gross,percap])
+
+
+padding=Spacer(width=30, height=10, sizing_mode='fixed')
 
 foci=['CA','AZ','FL','GA','TX','NC','LA']
 
-state_cases=statecompare('positiveIncrease_avg','New Cases (7-day avg)',foci)
-state_hospitalizations=statecompare('hospitalizedCurrently','Hospitalized',foci)
-state_deaths=statecompare('deathIncrease_avg','Deaths (7-day avg)',foci)
+state_cases=percap('positiveIncrease_avg','New Cases (7-day avg)',foci)
+state_hospitalizations=percap('hospitalizedCurrently','Hospitalized',foci)
+state_deaths=percap('deathIncrease_avg','Deaths (7-day avg)',foci)
 positivity=statecompare('positivity','Positivity (7-day avg)',foci)
 
-positivity.children[0].y_range=Range1d(0,1,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
-positivity.children[0].yaxis.formatter=NumeralTickFormatter(format="0%")
-positivity.children[0].hover._property_values['tooltips'][2]=('Positivity (7-day avg)', '@positivity{0.0%}')
+positivity.y_range=Range1d(0,1,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
+positivity.yaxis.formatter=NumeralTickFormatter(format="0%")
+positivity.hover._property_values['tooltips'][2]=('Positivity (7-day avg)', '@positivity{0.0%}')
 
-state_hospitalizations.children[0].x_range=state_cases.children[0].x_range
-state_deaths.children[0].x_range=state_cases.children[0].x_range
-state_deaths.children[0].y_range=Range1d(0,math.ceil(df[~df.state.isin(['NY','NJ'])].deathIncrease_avg.max()*1.05/10)*10, bounds=(0,math.ceil(df.deathIncrease_avg.max()*1.5/10)*10))
-positivity.children[0].x_range=state_cases.children[0].x_range
+#state_hospitalizations.x_range=state_cases.x_range
+#state_deaths.x_range=state_cases.x_range
+#state_deaths.y_range=Range1d(0,math.ceil(df[~df.state.isin(['NY','NJ'])].deathIncrease_avg.max()*1.05/10)*10, bounds=(0,math.ceil(df.deathIncrease_avg.max()*1.5/10)*10))
+#positivity.x_range=state_cases.x_range
 
 nationalcharts=Panel(child=
-                         layout([[state_cases,positivity],[state_hospitalizations,state_deaths]],
+                         layout([[state_cases,positivity,padding],[state_hospitalizations,state_deaths,padding]],
                          sizing_mode='stretch_width',
                          ),
                      title='National')
@@ -333,6 +347,7 @@ Official Sites:<br>
 <a href="https://epiforecasts.io/covid/posts/national/united-states/">Epiforecasts model</a><br>
 <a href="https://rt.live/">Estimator of R</a><br>
 <br>Vaccines:<br>
+<a href="https://vac-lshtm.shinyapps.io/ncov_vaccine_landscape/">Vaccine Tracker w/ Gantt View</a><br>
 <a href="https://www.nytimes.com/interactive/2020/science/coronavirus-vaccine-tracker.html">NYT Vaccine Tracker</a><br>
 <a href="https://www.raps.org/news-and-articles/news-articles/2020/3/covid-19-vaccine-tracker">RAPS Vaccine Tracker</a><br>
 <br>Economic Impacts:<br>
@@ -361,7 +376,7 @@ header=Soup("""
     <li><a href="/CAISOData.html">CAISO Data</a></li> 
     <li><a href="/CCAMap">CCA Service Territory</a></li>
     <li><a href="COVID19.html">COVID-19 Data</a></li>
-    <li><a href="https://teslaconnect.michaelchamp.com">TeslaConnect/a></li>
+    <li><a href="https://teslaconnect.michaelchamp.com">TeslaConnect</a></li>
   </ul> 
   <link rel="icon" 
       type="image/png" 
