@@ -42,7 +42,7 @@ df=df[df['Date']>='2020-03-15']
 
 url="https://gist.githubusercontent.com/mshafrir/2646763/raw/8b0dbb93521f5d6889502305335104218454c2bf/states_hash.json"
 state_mapping=json.loads(requests.get(url).content)
-df.state_name=df.state.map(state_mapping)
+df['state_name']=df.state.map(state_mapping)
 
 def rolling_7_avg(df,date,group,field):
     newname=field+'_avg'
@@ -363,7 +363,7 @@ footer=Soup("""<div class="footer">
     , Michael Champ</p>
 </div>""",features='lxml')
 
-tracker=Soup("""<!-- Global site tag (gtag.js) - Google Analytics -->
+tracker=Soup("""<div><!-- Global site tag (gtag.js) - Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=UA-134772498-1"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -371,7 +371,7 @@ tracker=Soup("""<!-- Global site tag (gtag.js) - Google Analytics -->
   gtag('js', new Date());
 
   gtag('config', 'UA-134772498-1');
-</script>""",features='lxml')
+</script></div>""",features='lxml')
     
 #Insert script to add custom html header and footer
 htmlfile = open(fileloc+'COVID19.html', "r").read()
@@ -379,8 +379,7 @@ soup=Soup(htmlfile,"lxml")
 
 soup.find('title').insert_after(header.body.div)
 soup.find('body').insert_after(footer.body.div)
-soup.find('title').insert_before(tracker.head.contents[0])
-soup.find('title').insert_before(tracker.head.contents[2])
+soup.find('title').insert_before(tracker.body.div)
 
 f = open(fileloc+'COVID19.html', "w")
 f.write(str(soup).replace('©','&copy;'))
