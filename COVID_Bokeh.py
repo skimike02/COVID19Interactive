@@ -4,14 +4,17 @@ Created on Tue Jun 23 09:00:48 2020
 @author: Micha
 
 To do:
-    Add State of CA overall charts (positivity, hospitalizations)
-    Add mouseover to CA ICU charts
+    CA Charts
+        -Add mouseover to CA ICU and hospitalization charts
+    County Charts
+        -Add county hospitalization/ICU charts
+        -Add mouseover to ICU charts
     Make chloropleths
 """
 #%% Config
 import pandas as pd
 from bokeh.plotting import figure, show, save
-from bokeh.models import NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs,Div
+from bokeh.models import NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs,Div,LinearAxis
 from bokeh.layouts import layout,row,Spacer
 from bokeh.palettes import Category20
 import itertools
@@ -181,7 +184,6 @@ def percap(metric,metricname,foci):
     percap=Panel(child=percap_chart,title='Per 100k')
     return Tabs(tabs=[gross,percap])
 
-
 padding=Spacer(width=30, height=10, sizing_mode='fixed')
 
 foci=['CA','AZ','FL','GA','TX','NC','LA']
@@ -191,14 +193,66 @@ state_hospitalizations=percap('hospitalizedCurrently','Hospitalized',foci)
 state_deaths=percap('deathIncrease_avg','Deaths (7-day avg)',foci)
 positivity=statecompare('positivity','Positivity (7-day avg)',foci)
 
-positivity.y_range=Range1d(0,1,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
+positivity.y_range=Range1d(0,0.6,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
 positivity.yaxis.formatter=NumeralTickFormatter(format="0%")
 positivity.hover._property_values['tooltips'][2]=('Positivity (7-day avg)', '@positivity{0.0%}')
 
 state_deaths.tabs[0].child.y_range=Range1d(0,math.ceil(df[~df.state.isin(['NY','NJ'])].deathIncrease_avg.max()*1.05), bounds=(0,math.ceil(df.deathIncrease_avg.max()*1.5)))
 
+nation_sum=df.groupby('Date').sum()
+nation_sum['positivity_avg']=nation_sum.positiveIncrease_avg/nation_sum.totalTestResultsIncrease_avg
+nation_sum['positivity']=nation_sum.positiveIncrease/nation_sum.totalTestResultsIncrease
+
+fields=['totalTestResultsIncrease','positiveIncrease']
+
+
+source=ColumnDataSource(nation_sum)
+nation=figure(title='National', x_axis_type='datetime', plot_width=200, plot_height=400,
+               tools="pan,wheel_zoom,reset,save",
+                active_scroll='wheel_zoom',
+                sizing_mode='stretch_width'
+                )
+nation.extra_y_ranges = {"deaths": Range1d(start=0, end=df.groupby('Date').sum().deathIncrease.max())}
+nation.add_layout(LinearAxis(y_range_name="deaths", axis_label='Deaths'), 'right')
+nation.yaxis.formatter=NumeralTickFormatter(format="0,")
+
+nation.line(x='Date', y='deathIncrease_avg', source=source,legend_label = 'Avg Deaths', color='red',y_range_name="deaths",width=2)
+nation.line(x='Date', y='deathIncrease', source=source,legend_label = 'Daily Deaths', color='red',y_range_name="deaths",alpha=0.2)
+nation.line(x='Date', y='hospitalizedCurrently', source=source,legend_label = 'Hospitalized', color='orange',width=2)
+nation.line(x='Date', y='positiveIncrease_avg', source=source,legend_label = 'Avg Cases', color='green',width=2)
+nation.line(x='Date', y='positiveIncrease', source=source,legend_label = 'Daily Cases', color='green',alpha=0.2)
+nation.yaxis[0].axis_label = 'Cases, Hospitalization'
+nation.legend.location = "top_left"
+hover = HoverTool(tooltips =[
+     ('Date','@Date{%F}'),
+     ('Cases','@positiveIncrease{0,}'),
+     ('Avg Cases','@positiveIncrease_avg{0,}'),
+     ('Hospitalized','@hospitalizedCurrently{0,}'),
+     ('Deaths','@deathIncrease{0,}'),
+     ('Avg Deaths','@deathIncrease_avg{0,}'),
+     ],
+     formatters={'@Date': 'datetime'})
+nation.add_tools(hover)
+
+nation_positivity=figure(title='Positivity', x_axis_type='datetime', plot_width=200, plot_height=400,
+               tools="pan,wheel_zoom,reset,save",
+                active_scroll='wheel_zoom',
+                sizing_mode='stretch_width'
+                )
+nation_positivity.line(x='Date', y='positivity_avg', source=source,legend_label = 'Avg Positivity', color='blue',width=2)
+nation_positivity.line(x='Date', y='positivity', source=source,legend_label = 'Positivity', color='blue',alpha=0.2)
+hover = HoverTool(tooltips =[
+     ('Date','@Date{%F}'),
+     ('Positivity','@positivity{0.0%}'),
+     ('Avg Positivity','@positivity_avg{0.0%}'),
+     ],
+     formatters={'@Date': 'datetime'})
+nation_positivity.add_tools(hover)
+nation_positivity.yaxis.formatter=NumeralTickFormatter(format="0%")
+
+
 nationalcharts=Panel(child=
-                         layout([[state_cases,positivity,padding],[state_hospitalizations,state_deaths,padding]],
+                         layout([[nation,nation_positivity,padding],[state_cases,positivity,padding],[state_hospitalizations,state_deaths,padding]],
                          sizing_mode='stretch_width',
                          ),
                      title='National')
@@ -241,12 +295,19 @@ hospitalizations=figure(x_axis_type='datetime',
                toolbar_location='above',
                tools=[HoverTool(tooltips=[
                    ('Date','@Date{%F}'),
+                   ('Hospitalized Confirmed','@hospitalized_confirmed_nonICU{0,}'),
+                   ('Hospitalized Suspected','@hospitalized_suspected_nonICU{0,}'),
+                   ('ICU Confirmed','@icu_covid_confirmed_patients{0,}'),
+                   ('ICU Suspected','@icu_suspected_covid_patients{0,}'),
                    ],
                    formatters={'@Date': 'datetime'})]
             )
 hospitalizations.varea_stack(['hospitalized_confirmed_nonICU','hospitalized_suspected_nonICU','icu_covid_confirmed_patients','icu_suspected_covid_patients'], x='Date', color=['green','yellow','orange','red'],
                              legend_label=['Hospitalized Confirmed','Hospitalized Suspected','ICU Confirmed','ICU Suspected'],
                              source=ColumnDataSource(ca))
+
+hospitalizations.vline_stack(['hospitalized_confirmed_nonICU','hospitalized_suspected_nonICU','icu_covid_confirmed_patients','icu_suspected_covid_patients'], x='Date', source=ColumnDataSource(ca),alpha=0)
+
 hospitalizations.yaxis.formatter=NumeralTickFormatter(format="0,")
 hospitalizations.legend.location = "top_left"
 
@@ -255,19 +316,22 @@ casource = ColumnDataSource(caData.groupby('Date').sum())
 icu = figure(x_axis_type='datetime',
            plot_height=400,
            sizing_mode='stretch_width',
-           title="CA ICU Capacity",
+           title="ICU Capacity",
            toolbar_location='above',
            tools=[HoverTool(tooltips=[
                ('Date','@Date{%F}'),
-               ('ICU','@ICU{0,}')
+               ('ICU','@ICU{0,}'),
+               ('Non-COVID ICU','@noncovid_icu{0,}'),
+               ('Available Beds','@icu_available_beds{0,}'),
                ],
                formatters={'@Date': 'datetime'})]
         )
 icu.varea_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', color=['red','yellow','green'], source=casource,
               legend_label=['COVID Cases','Non-COVID Cases','Available Beds'])
+icu.vline_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', source=casource,alpha=0)
+
 icu.yaxis.formatter=NumeralTickFormatter(format="0,")
 icu.legend.location = "top_left"
-
 
 
 statecharts=Panel(child=
@@ -360,6 +424,7 @@ Official Sites:<br>
 <a href="https://www.saccounty.net/COVID-19/Pages/default.aspx">Sacramento County page, including current Public Health Order</a><br>
 <a href="https://covid19.ca.gov">CA Main Page</a><br>
 <a href="https://www.cdc.gov/coronavirus/2019-ncov/index.html">CDC Main Page</a><br>
+<a href="https://www.cdc.gov/nchs/nvss/vsrr/covid19/excess_deaths.htm">CDC Estimate of Excess Deaths</a><br>
 <br>Models:<br>
 <a href="https://calcat.covid19.ca.gov/cacovidmodels/">Official CA Model</a><br>
 <a href="https://www.covid-projections.com/">Historical comparison of models</a><br>
@@ -380,7 +445,11 @@ Official Sites:<br>
 about=Panel(child=Div(text=about_html),title='About')
 
 
-page=Tabs(tabs=[nationalcharts,statecharts,countycharts,about])
+page=Tabs(tabs=[nationalcharts,
+                statecharts,
+                countycharts,
+                about
+                ])
 
 mode='prod'
 if mode=='dev':
