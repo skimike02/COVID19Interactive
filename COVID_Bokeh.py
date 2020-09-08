@@ -47,7 +47,7 @@ df['STATE']=df.state.map(state_mapping).str.upper()
 def rolling_7_avg(df,date,group,field):
     newname=field+'_avg'
     df.sort_values(by=[group,date],inplace=True)
-    df2=df.sort_values(by=[group,date]).assign(newname=df.groupby([group], as_index=False)[[field]].rolling(7,min_periods=7).mean().reset_index(0, drop=True))
+    df2=df.assign(newname=df[[group,field]].groupby([group], as_index=False).rolling(7,min_periods=7).mean().reset_index(0, drop=True))
     return df2.rename(columns={"newname": newname})
 
 fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
@@ -355,8 +355,9 @@ def countychart(county):
                    toolbar_location='above',
                    tools=["pan,reset,save,wheel_zoom",HoverTool(tooltips=[
                    ('Date','@Date{%F}'),
+                   ('7-day avg New Cases/100k','@positiveIncrease_avg_percap{0.00}'),
                    ('Daily New Cases','@positiveIncrease{0,}'),
-                   ('7-day average New Cases','@positiveIncrease_avg{0,}')
+                   ('7-day avg New Cases','@positiveIncrease_avg{0,}'),
                    ],
                    formatters={'@Date': 'datetime'})],
                    active_scroll='wheel_zoom')       
