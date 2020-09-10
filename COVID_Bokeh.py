@@ -44,16 +44,10 @@ df['STATE']=df.state.map(state_mapping).str.upper()
 def rolling_7_avg(df,date,group,field):
     newname=field+'_avg'
     df.sort_values(by=[group,date],inplace=True)
-    df[newname]=df.groupby(group).rolling(7,min_periods=7)[field].mean().reset_index()[field]
-    return df
-
-fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
-
-for field in fields:
-    df=rolling_7_avg(df,'Date','state',field)
-
-df['positivity']=df.positiveIncrease_avg/df.totalTestResultsIncrease_avg
-df.loc[df.positivity > 1,'positivity'] = 1
+    #averages=df.groupby(group).rolling(7,min_periods=7)[field].mean().reset_index()[field]
+    averages=df.reset_index().set_index(date).groupby(group).rolling(7,min_periods=7)[field].mean().reset_index()
+    averages.rename(columns={field:newname},inplace=True)
+    return df.merge(averages,on=[group,date])
 
 #CA Data
 print("Getting state data...")
@@ -92,17 +86,6 @@ df4=df4[['county','POPESTIMATE2019']]
 caData=caData.merge(df4, left_on='COUNTY',right_on='county')
 caData.rename(columns={"POPESTIMATE2019": "pop"},inplace=True)
 
-"""#Accelerated Reopening
-print("Getting accelerated reopening plans...")
-url='https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/County_Variance_Attestation_Form.aspx'
-soup = bs(r.get(url).content, 'html.parser')
-list=soup.findAll("div", {"class": "NewsItemContent"})[0].findAll("ul")[1].findAll("li")
-accel_counties=[]
-for item in list:
-    for i in (item.findAll("a")[0].text.replace("County","").strip().split('-')):
-        accel_counties.append(i)
-"""
-
 #County Data calculated fields
 caData['hospitalized_confirmed_nonICU']=(caData['hospitalized_covid_confirmed_patients']-caData['icu_covid_confirmed_patients']).clip(0)
 caData['hospitalized_suspected_nonICU']=(caData['hospitalized_suspected_covid_patients']-caData['icu_suspected_covid_patients']).clip(0)
@@ -115,6 +98,15 @@ mask=~(caData.county.shift(1)==caData.county)
 caData['positiveIncrease']=caData['newcountconfirmed'].clip(0)
 caData['deathIncrease']=caData['newcountdeaths'].clip(0)
 caData['noncovid_icu']=caData.ICU_capacity-caData.ICU-caData.icu_available_beds
+
+
+fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
+
+for field in fields:
+    df=rolling_7_avg(df,'Date','state',field)
+
+df['positivity']=df.positiveIncrease_avg/df.totalTestResultsIncrease_avg
+df.loc[df.positivity > 1,'positivity'] = 1
 
 fields=['positiveIncrease','deathIncrease']
 
@@ -496,11 +488,7 @@ page=Tabs(tabs=[nationalcharts,
                 about
                 ])
 
-mode='prod'
-if mode=='dev':
-    show(page)
-if mode=='prod':
-    save(page,resources=None,filename=fileloc+'COVID19.html',title='COVID19')
+save(page,resources=None,filename=fileloc+'COVID19.html',title='COVID19')
 
 header=Soup("""
 <div class="header">
@@ -510,6 +498,7 @@ header=Soup("""
     <li><a href="/CAISOData.html">CAISO Data</a></li> 
     <li><a href="/CCAMap">CCA Service Territory</a></li>
     <li><a href="COVID19.html">COVID-19 Data</a></li>
+    <li><a href="Economy.html">Economic Data</a></li>
     <li><a href="https://teslaconnect.michaelchamp.com">TeslaConnect</a></li>
   </ul> 
   <link rel="icon" 
