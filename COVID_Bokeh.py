@@ -1,28 +1,25 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jun 23 09:00:48 2020
-@author: Micha
-
 To do:
-    CA Charts
-        -Add mouseover to CA ICU and hospitalization charts
     County Charts
         -Add county hospitalization/ICU charts
         -Add mouseover to ICU charts
-    Make chloropleths
+    Make choropleths
 """
 #%% Config
 import pandas as pd
 from bokeh.plotting import figure, show, save
-from bokeh.models import NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs,Div,LinearAxis
+from bokeh.models import (NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs,Div,
+                          LinearAxis, GeoJSONDataSource, LinearColorMapper, ColorBar)
 from bokeh.layouts import layout,row,Spacer
-from bokeh.palettes import Category20
+from bokeh.palettes import Category20,OrRd9
 import itertools
 from datetime import timedelta
 import math
 from bs4 import BeautifulSoup as Soup
 import requests
 import json
+import geopandas as gpd
 
 import config
 
@@ -59,6 +56,7 @@ df['positivity']=df.positiveIncrease_avg/df.totalTestResultsIncrease_avg
 df.loc[df.positivity > 1,'positivity'] = 1
 
 #CA Data
+print("Getting state data...")
 url='https://data.ca.gov/dataset/590188d5-8545-4c93-a9a0-e230f0db7290/resource/926fd08f-cc91-4828-af38-bd45de97f8c3/download/statewide_cases.csv'
 caCases=pd.read_csv(url,delimiter=',')
 url='https://data.ca.gov/dataset/529ac907-6ba1-4cb7-9aae-8966fc96aeef/resource/42d33765-20fd-44b8-a978-b083b7542225/download/hospitals_by_county.csv'
@@ -258,6 +256,49 @@ nationalcharts=Panel(child=
                          ),
                      title='National')
 
+#%% Maps
+
+def get_geodatasource(gdf):    
+    json_data = json.dumps(json.loads(gdf.to_json()))
+    return GeoJSONDataSource(geojson = json_data)
+
+shapefile = 'Counties/cb_2018_us_county_500k.shp'
+gdf = gpd.read_file(shapefile)[['NAME','geometry']]
+merged = gdf.merge(caData[caData.Date==caData.Date.max()], left_on = 'NAME', right_on = 'County', how = 'left').drop(columns='Date')
+palette=OrRd9[::-1]
+
+
+def plot_map(df,metric,high,low,**kwargs):
+    global palette
+    source=get_geodatasource(merged)
+    tools = 'wheel_zoom,pan,reset'
+    color_mapper = LinearColorMapper(palette=palette, low = low, high = high)
+    p = figure(
+        title=kwargs.get('title','Chart'), tools=tools, plot_width=500,
+        x_axis_location=None, y_axis_location=None,
+        tooltips=[("Name", "@NAME"), (kwargs.get('label','metric'), "@"+metric+'{0.00}')],
+        sizing_mode='scale_width',
+        )
+    
+    p.grid.grid_line_color = None
+    p.hover.point_policy = "follow_mouse"
+    p.patches(xs='xs', ys='ys', source=source,
+              fill_color={'field': metric, 'transform': color_mapper},
+              fill_alpha=0.7, line_color="grey", line_width=0.5)
+    color_bar = ColorBar(color_mapper=color_mapper,
+                         label_standoff=8,
+                         height=20,
+                         location=(0,0),
+                         orientation='horizontal')
+    p.add_layout(color_bar, 'below')
+    return(p)
+
+data_as_of=caData.Date.max().strftime("%b %d")
+hospitalization_map=plot_map(merged,'hospital_usage',30,0,title='Hospitalizations as of '+data_as_of,label='% hospitalization usage')
+cases_map=plot_map(merged,'positiveIncrease_avg_percap',30,0,title='Daily New Cases (7-day avg) as of '+data_as_of,label='daily new cases per 100k')
+deaths_map=plot_map(merged,'deathIncrease_avg_percap',1,0,title='Daily New Deaths (7-day avg) as of '+data_as_of,label='daily new deaths per 100k')
+icu_map=plot_map(merged,'ICU_usage',30,0,title='ICU Usage as of '+data_as_of,label='% ICU Usage')
+
 #%% State 
 
 source = ColumnDataSource(df[df.state=='CA'])
@@ -336,8 +377,9 @@ icu.legend.location = "top_left"
 
 
 statecharts=Panel(child=
-                         layout([[tests,cases,deaths],[hospitalizations,icu,Spacer(width=30, height=10, sizing_mode='fixed')]],
-                         sizing_mode='stretch_width',
+                         layout([[tests,cases,deaths],[hospitalizations,icu,Spacer(width=30, height=10, sizing_mode='fixed')],
+                                 [cases_map,hospitalization_map,icu_map,deaths_map,Spacer(width=30, height=10, sizing_mode='fixed')]],
+                         sizing_mode='scale_width',
                          ),
                       title='California')
 
@@ -413,6 +455,7 @@ countycharts=Panel(child=
                        ),
                    title='Region'
                 )
+
 
 #%% HTML Generation
 about_html="""
