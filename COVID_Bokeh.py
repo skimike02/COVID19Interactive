@@ -534,3 +534,4 @@ soup.find('title').insert_before(tracker.body.div)
 
 f = open(fileloc+'COVID19.html', "w")
 f.write(str(soup).replace('©','&copy;'))
+f.close()
