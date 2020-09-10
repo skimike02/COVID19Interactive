@@ -44,8 +44,8 @@ df['STATE']=df.state.map(state_mapping).str.upper()
 def rolling_7_avg(df,date,group,field):
     newname=field+'_avg'
     df.sort_values(by=[group,date],inplace=True)
-    df2=df.assign(newname=df[[group,field]].groupby([group], as_index=False).rolling(7,min_periods=7).mean().reset_index(0, drop=True))
-    return df2.rename(columns={"newname": newname})
+    df[newname]=df.groupby(group).rolling(7,min_periods=7)[field].mean().reset_index()[field]
+    return df
 
 fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
 
