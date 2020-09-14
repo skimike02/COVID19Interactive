@@ -487,7 +487,7 @@ page=Tabs(tabs=[nationalcharts,
                 countycharts,
                 about
                 ])
-
+print("saving file to "+fileloc+'COVID19.html')
 save(page,resources=None,filename=fileloc+'COVID19.html',title='COVID19')
 
 header=Soup("""
@@ -525,6 +525,7 @@ tracker=Soup("""<div><!-- Global site tag (gtag.js) - Google Analytics -->
 </script></div>""",features='lxml')
     
 #Insert script to add custom html header and footer
+print("adding header and footer")
 htmlfile = open(fileloc+'COVID19.html', "r").read()
 soup=Soup(htmlfile,"lxml")
 
@@ -535,3 +536,4 @@ soup.find('title').insert_before(tracker.body.div)
 f = open(fileloc+'COVID19.html', "w")
 f.write(str(soup).replace('©','&copy;'))
 f.close()
+print("done")
