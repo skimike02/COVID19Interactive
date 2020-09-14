@@ -1,0 +1,68 @@
+{% from macros import embed %}
+
+<!DOCTYPE html>
+<html lang="en">
+{% block head %}
+<head>
+    {% block inner_head %}
+    <meta charset="utf-8">
+    <div><!-- Global site tag (gtag.js) - Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-134772498-1"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+
+          gtag('config', 'UA-134772498-1');
+        </script>
+    </div>
+    <title>{% block title %}{{ title | e if title else "Bokeh Plot" }}{% endblock %}</title>
+    {% block preamble %}{% endblock %}
+    {% block resources %}
+        {% block css_resources %}
+        {{ bokeh_css | indent(8) if bokeh_css }}
+        {% endblock %}
+        {% block js_resources %}
+        {{ bokeh_js | indent(8) if bokeh_js }}
+        {% endblock %}
+    {% endblock %}
+    {% block postamble %}{% endblock %}
+    {% endblock %}
+    <div class="header">
+      <h1 style: {width: 100%}>A selection of tools</h1> 
+      <ul class="navigation"> 
+        <li><a href="/index.html">Home</a></li> 
+        <li><a href="/CAISOData.html">CAISO Data</a></li> 
+        <li><a href="/CCAMap">CCA Service Territory</a></li>
+        <li><a href="COVID19.html">COVID-19 Data</a></li>
+        <li><a href="Economy.html">Economic Data</a></li>
+        <li><a href="https://teslaconnect.michaelchamp.com">TeslaConnect</a></li>
+      </ul> 
+      <link rel="icon" 
+          type="image/png" 
+          href="https://michaelchamp.com/assets/logo.png">
+     <link rel="stylesheet" href="styles.css">
+     </div>
+</head>
+{% endblock %}
+{% block body %}
+<body>
+    {% block inner_body %}
+    {% block contents %}
+        {% for doc in docs %}
+        {{ embed(doc) if doc.elementid }}
+        {% for root in doc.roots %}
+            {{ embed(root) | indent(10) }}
+        {% endfor %}
+        {% endfor %}
+    {% endblock %}
+    {{ plot_script | indent(8) }}
+    {% endblock %}
+</body>
+{% endblock %}
+<div class="footer"> 
+  <p>&copy; 2020
+    <script>new Date().getFullYear()>2010&&document.write("-"+new Date().getFullYear());</script>
+    , Michael Champ</p>
+</div>
+</html>
