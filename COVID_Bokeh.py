@@ -8,7 +8,7 @@ To do:
 """
 #%% Config
 import pandas as pd
-from bokeh.plotting import figure, show, save
+from bokeh.plotting import figure, show, save, output_file
 from bokeh.models import (NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs,Div,
                           LinearAxis, GeoJSONDataSource, LinearColorMapper, ColorBar)
 from bokeh.layouts import layout,row,Spacer
@@ -488,7 +488,8 @@ page=Tabs(tabs=[nationalcharts,
                 about
                 ])
 print("saving file to "+fileloc+'COVID19.html')
-save(page,resources=None,filename=fileloc+'COVID19.html',title='COVID19')
+output_file(fileloc+'COVID19.html')
+save(page,title='COVID19')
 
 header=Soup("""
 <div class="header">
