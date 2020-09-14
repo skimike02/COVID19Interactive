@@ -4,7 +4,6 @@ To do:
     County Charts
         -Add county hospitalization/ICU charts
         -Add mouseover to ICU charts
-    Make choropleths
 """
 #%% Config
 import pandas as pd
@@ -16,10 +15,10 @@ from bokeh.palettes import Category20,OrRd9
 import itertools
 from datetime import timedelta
 import math
-from bs4 import BeautifulSoup as Soup
 import requests
 import json
 import geopandas as gpd
+import jinja2
 
 import config
 
@@ -489,52 +488,9 @@ page=Tabs(tabs=[nationalcharts,
                 ])
 print("saving file to "+fileloc+'COVID19.html')
 output_file(fileloc+'COVID19.html')
-save(page,title='COVID19')
+templateLoader = jinja2.FileSystemLoader(searchpath="./")
+templateEnv = jinja2.Environment(loader=templateLoader)
+TEMPLATE_FILE = "template.html"
+template = templateEnv.get_template(TEMPLATE_FILE)
+save(page,title='COVID19',template=template)
 
-header=Soup("""
-<div class="header">
-  <h1 style: {width: 100%}>A selection of tools</h1> 
-  <ul class="navigation"> 
-    <li><a href="/index.html">Home</a></li> 
-    <li><a href="/CAISOData.html">CAISO Data</a></li> 
-    <li><a href="/CCAMap">CCA Service Territory</a></li>
-    <li><a href="COVID19.html">COVID-19 Data</a></li>
-    <li><a href="Economy.html">Economic Data</a></li>
-    <li><a href="https://teslaconnect.michaelchamp.com">TeslaConnect</a></li>
-  </ul> 
-  <link rel="icon" 
-      type="image/png" 
-      href="https://michaelchamp.com/assets/logo.png">
- <link rel="stylesheet" href="styles.css">
- </div>
-""",features='lxml')
-
-footer=Soup("""<div class="footer"> 
-  <p>&copy; 2020
-    <script>new Date().getFullYear()>2010&&document.write("-"+new Date().getFullYear());</script>
-    , Michael Champ</p>
-</div>""",features='lxml')
-
-tracker=Soup("""<div><!-- Global site tag (gtag.js) - Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=UA-134772498-1"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'UA-134772498-1');
-</script></div>""",features='lxml')
-    
-#Insert script to add custom html header and footer
-print("adding header and footer")
-htmlfile = open(fileloc+'COVID19.html', "r").read()
-soup=Soup(htmlfile,"lxml")
-
-soup.find('title').insert_after(header.body.div)
-soup.find('body').insert_after(footer.body.div)
-soup.find('title').insert_before(tracker.body.div)
-
-f = open(fileloc+'COVID19.html', "w")
-f.write(str(soup).replace('©','&copy;'))
-f.close()
-print("done")
