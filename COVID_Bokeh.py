@@ -13,12 +13,14 @@ from bokeh.models import (NumeralTickFormatter,ColumnDataSource,HoverTool, Range
 from bokeh.layouts import layout,row,Spacer
 from bokeh.palettes import Category20,OrRd9
 import itertools
-from datetime import timedelta
+import datetime
 import math
 import requests
 import json
 import geopandas as gpd
 import jinja2
+import logging
+import os
 
 import config
 
@@ -26,18 +28,29 @@ fileloc=config.fileloc
 mode=config.mode
 base_url=config.base_url
 
+if not os.path.exists(config.log_dir):
+    os.makedirs(config.log_dir)
+if not os.path.exists(config.log_dir+config.log_file):
+    with open(config.log_dir+config.log_file,'w+'): pass
+logging.basicConfig(filename=config.log_dir+config.log_file, level=logging.INFO)
+logging.info('%s COVID Dashboard Update Started', datetime.datetime.now())
+
 state='CA'
 counties=['Sacramento','El Dorado','Placer','Yolo']
 #%% Data Imports
 #Tests and National Stats
-print("Getting national statistics...")
+print("Fetching national statistics...")
+logging.info('%s Fetching national statistics', datetime.datetime.now())
 url='https://covidtracking.com/api/v1/states/daily.json'
 df=pd.read_json(url)
+logging.info('%s fetched', datetime.datetime.now())
 df['Date']=pd.to_datetime(df.date, format='%Y%m%d', errors='ignore')
 df=df[df['Date']>='2020-03-15']
 
+logging.info('%s Fetching state mapping', datetime.datetime.now())
 url="https://gist.githubusercontent.com/mshafrir/2646763/raw/8b0dbb93521f5d6889502305335104218454c2bf/states_hash.json"
 state_mapping=json.loads(requests.get(url).content)
+logging.info('%s fetched', datetime.datetime.now())
 df['STATE']=df.state.map(state_mapping).str.upper()
 
 def rolling_7_avg(df,date,group,field):
@@ -49,11 +62,15 @@ def rolling_7_avg(df,date,group,field):
     return df.merge(averages,on=[group,date])
 
 #CA Data
-print("Getting state data...")
+print("Getting state case data...")
+logging.info('%s Fetching state data', datetime.datetime.now())
 url='https://data.ca.gov/dataset/590188d5-8545-4c93-a9a0-e230f0db7290/resource/926fd08f-cc91-4828-af38-bd45de97f8c3/download/statewide_cases.csv'
 caCases=pd.read_csv(url,delimiter=',')
+logging.info('%s fetched', datetime.datetime.now())
+logging.info('%s Fetching state hospitalization data', datetime.datetime.now())
 url='https://data.ca.gov/dataset/529ac907-6ba1-4cb7-9aae-8966fc96aeef/resource/42d33765-20fd-44b8-a978-b083b7542225/download/hospitals_by_county.csv'
 caHosp=pd.read_csv(url,delimiter=',')
+logging.info('%s fetched', datetime.datetime.now())
 caHosp = caHosp[pd.notnull(caHosp['todays_date'])]
 caHosp = caHosp[pd.notnull(caHosp['county'])]
 caData=caCases.merge(caHosp, how='left', left_on=['county','date'], right_on=['county','todays_date'])
@@ -64,8 +81,10 @@ caData.drop(columns=['date','todays_date'], inplace=True)
 
 #hospital capacity
 print("Getting hospital capacity...")
+logging.info('%s Fetching hospital capacity data', datetime.datetime.now())
 url='https://data.chhs.ca.gov/datastore/dump/0997fa8e-ef7c-43f2-8b9a-94672935fa60?q=&sort=_id+asc&fields=FACID%2CFACNAME%2CFAC_FDR%2CBED_CAPACITY_TYPE%2CBED_CAPACITY%2CCOUNTY_NAME&filters=%7B%7D&format=csv'
 df3=pd.read_csv(url,delimiter=',')
+logging.info('%s fetched', datetime.datetime.now())
 hospital_capacity=df3[df3['FAC_FDR']=='GENERAL ACUTE CARE HOSPITAL'].groupby('COUNTY_NAME').sum()['BED_CAPACITY']
 ICU_capacity=df3[(df3['FAC_FDR']=='GENERAL ACUTE CARE HOSPITAL')&(df3['BED_CAPACITY_TYPE']=='INTENSIVE CARE')].groupby('COUNTY_NAME').sum()['BED_CAPACITY']
 hospital_capacity.rename("hospital_capacity",inplace=True)
@@ -74,8 +93,10 @@ caData=caData.merge(hospital_capacity,left_on='COUNTY', right_index=True, how='l
 
 #County Population
 print("Getting county populations...")
+logging.info('%s Fetching county population data', datetime.datetime.now())
 url='https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/co-est2019-alldata.csv'
 df4=pd.read_csv(url,delimiter=',',encoding='latin-1')
+logging.info('%s fetched', datetime.datetime.now())
 statepop=df4.groupby('STNAME').sum().POPESTIMATE2019.to_frame(name="pop")
 statepop['STATE']=statepop.index.str.upper()
 df=df.merge(statepop,how='left',on='STATE')
@@ -379,7 +400,7 @@ statecharts=Panel(child=
 def countychart(county):
     source=ColumnDataSource(caData[caData.County==county].groupby('Date').sum())
     cases = figure(x_axis_type='datetime',
-                   x_range=Range1d(caData.Date.min(),caData.Date.max(),bounds=(caData.Date.min()-timedelta(days=5),caData.Date.max()+timedelta(days=5))),
+                   x_range=Range1d(caData.Date.min(),caData.Date.max(),bounds=(caData.Date.min()-datetime.timedelta(days=5),caData.Date.max()+datetime.timedelta(days=5))),
                    y_range=Range1d(0,math.ceil(caData[caData.County.isin(counties)].positiveIncrease_percap.max()*1.05/10)*10, bounds=(0,math.ceil(caData[caData.County.isin(counties)].positiveIncrease_percap.max()*10))),
                    title=county,
                    plot_height=300,
@@ -487,6 +508,8 @@ page=Tabs(tabs=[nationalcharts,
                 about
                 ])
 print("saving file to "+fileloc+'COVID19.html')
+logging.info('%s saving file to %sCOVID19.html', datetime.datetime.now(), fileloc)
+
 output_file(fileloc+'COVID19.html')
 templateLoader = jinja2.FileSystemLoader(searchpath="./")
 templateEnv = jinja2.Environment(loader=templateLoader)
