@@ -274,7 +274,7 @@ def get_geodatasource(gdf):
     json_data = json.dumps(json.loads(gdf.to_json()))
     return GeoJSONDataSource(geojson = json_data)
 
-shapefile = 'Counties/cb_2018_us_county_500k.shp'
+shapefile = config.path+'Counties/cb_2018_us_county_500k.shp'
 gdf = gpd.read_file(shapefile)[['NAME','geometry']]
 merged = gdf.merge(caData[caData.Date==caData.Date.max()], left_on = 'NAME', right_on = 'County', how = 'left').drop(columns='Date')
 palette=OrRd9[::-1]
