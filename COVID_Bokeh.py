@@ -27,6 +27,8 @@ import config
 fileloc=config.fileloc
 mode=config.mode
 base_url=config.base_url
+dir_path = os.path.dirname(os.path.abspath(__file__))
+
 
 if not os.path.exists(config.log_dir):
     os.makedirs(config.log_dir)
@@ -274,7 +276,7 @@ def get_geodatasource(gdf):
     json_data = json.dumps(json.loads(gdf.to_json()))
     return GeoJSONDataSource(geojson = json_data)
 
-shapefile = config.path+'Counties/cb_2018_us_county_500k.shp'
+shapefile = os.path.join(dir_path,'Counties/cb_2018_us_county_500k.shp')
 gdf = gpd.read_file(shapefile)[['NAME','geometry']]
 merged = gdf.merge(caData[caData.Date==caData.Date.max()], left_on = 'NAME', right_on = 'County', how = 'left').drop(columns='Date')
 palette=OrRd9[::-1]
@@ -513,7 +515,7 @@ logging.info('%s saving file to %sCOVID19.html', datetime.datetime.now(), filelo
 output_file(fileloc+'COVID19.html')
 templateLoader = jinja2.FileSystemLoader(searchpath="./")
 templateEnv = jinja2.Environment(loader=templateLoader)
-TEMPLATE_FILE = config.path+"template.html"
+TEMPLATE_FILE = "home.html"
 template = templateEnv.get_template(TEMPLATE_FILE)
 save(page,title='COVID19',template=template)
 
