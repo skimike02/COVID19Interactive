@@ -513,7 +513,7 @@ logging.info('%s saving file to %sCOVID19.html', datetime.datetime.now(), filelo
 output_file(fileloc+'COVID19.html')
 templateLoader = jinja2.FileSystemLoader(searchpath="./")
 templateEnv = jinja2.Environment(loader=templateLoader)
-TEMPLATE_FILE = "template.html"
+TEMPLATE_FILE = config.path+"template.html"
 template = templateEnv.get_template(TEMPLATE_FILE)
 save(page,title='COVID19',template=template)
 
