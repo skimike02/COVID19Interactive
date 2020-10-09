@@ -430,7 +430,7 @@ def countychart(county):
                    tools=["pan,reset,save,xwheel_zoom",HoverTool(tooltips=[
                    ('Date','@Date{%F}'),
                    ('Daily New Deaths','@deathIncrease{0,}'),
-                   ('7-day average New Deaths','@deathIncrease_avg{0,}')
+                   ('7-day average New Deaths','@deathIncrease_avg{0.00}')
                    ],
                    formatters={'@Date': 'datetime'})],
                    active_scroll='xwheel_zoom',
