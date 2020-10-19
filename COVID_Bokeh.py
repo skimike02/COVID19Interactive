@@ -158,7 +158,7 @@ def statecompare(metric,metricname,foci):
                 active_scroll='wheel_zoom',
                 sizing_mode='stretch_width'
                 )
-    grp_list = df.groupby('state').max().positive.nlargest(15).index.sort_values()
+    grp_list = df[['state','positive']].groupby('state').max().nlargest(15,'positive').index.sort_values()
     lines={}
     for i,color in zip(range(len(grp_list)),colors):
         source = ColumnDataSource(
