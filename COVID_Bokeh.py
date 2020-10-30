@@ -158,7 +158,12 @@ def statecompare(metric,metricname,foci):
                 active_scroll='wheel_zoom',
                 sizing_mode='stretch_width'
                 )
-    grp_list = df[['state','positive']].groupby('state').max().nlargest(15,'positive').index.sort_values()
+    largest_positive_percap = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg_percap']].groupby('state').sum().nlargest(10,'positiveIncrease_avg_percap').index)
+    largest_positive = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg']].groupby('state').sum().nlargest(10,'positiveIncrease_avg').index)
+    grp_list = largest_positive_percap.union(largest_positive)
+    grp_list.update(['NY','NJ','CA'])
+    grp_list=sorted(list(grp_list))
+    
     lines={}
     for i,color in zip(range(len(grp_list)),colors):
         source = ColumnDataSource(
@@ -199,7 +204,7 @@ def percap(metric,metricname,foci):
 
 padding=Spacer(width=30, height=10, sizing_mode='fixed')
 
-foci=['CA','AZ','FL','GA','TX','NC','LA']
+foci=['NY','NJ','CA']
 
 state_cases=percap('positiveIncrease_avg','New Cases (7-day avg)',foci)
 state_hospitalizations=percap('hospitalizedCurrently','Hospitalized',foci)
