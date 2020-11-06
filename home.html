@@ -6,7 +6,11 @@
 <head>
     {% block inner_head %}
     <meta charset="utf-8">
-    <div><!-- Global site tag (gtag.js) - Google Analytics -->
+    <link rel="icon" 
+    type="image/png" 
+    href="https://michaelchamp.com/assets/logo.png">
+    <link rel="stylesheet" href="styles.css">
+        <div><!-- Global site tag (gtag.js) - Google Analytics -->
         <script async src="https://www.googletagmanager.com/gtag/js?id=UA-134772498-1"></script>
         <script>
           window.dataLayer = window.dataLayer || [];
@@ -17,6 +21,7 @@
         </script>
     </div>
     <title>{% block title %}{{ title | e if title else "Bokeh Plot" }}{% endblock %}</title>
+
     {% block preamble %}{% endblock %}
     {% block resources %}
         {% block css_resources %}
@@ -39,10 +44,7 @@
         <li><a href="Election.html">Election</a></li>
         <li><a href="https://teslaconnect.michaelchamp.com">TeslaConnect</a></li>
       </ul> 
-      <link rel="icon" 
-          type="image/png" 
-          href="https://michaelchamp.com/assets/logo.png">
-     <link rel="stylesheet" href="styles.css">
+
      </div>
 </head>
 {% endblock %}
