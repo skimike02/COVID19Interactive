@@ -290,7 +290,7 @@ palette=OrRd9[::-1]
 def plot_map(df,metric,high,low,**kwargs):
     global palette
     source=get_geodatasource(merged)
-    tools = 'wheel_zoom,pan,reset'
+    tools = 'wheel_zoom,pan,reset,save'
     color_mapper = LinearColorMapper(palette=palette, low = low, high = high)
     p = figure(
         title=kwargs.get('title','Chart'), tools=tools, plot_width=500,
@@ -354,7 +354,7 @@ hospitalizations=figure(x_axis_type='datetime',
                sizing_mode='stretch_width',
                title='Hospitalizations',
                toolbar_location='above',
-               tools=[HoverTool(tooltips=[
+               tools=['save', HoverTool(tooltips=[
                    ('Date','@Date{%F}'),
                    ('Hospitalized Confirmed','@hospitalized_confirmed_nonICU{0,}'),
                    ('Hospitalized Suspected','@hospitalized_suspected_nonICU{0,}'),
@@ -379,7 +379,7 @@ icu = figure(x_axis_type='datetime',
            sizing_mode='stretch_width',
            title="ICU Capacity",
            toolbar_location='above',
-           tools=[HoverTool(tooltips=[
+           tools=['save',HoverTool(tooltips=[
                ('Date','@Date{%F}'),
                ('ICU','@ICU{0,}'),
                ('Non-COVID ICU','@noncovid_icu{0,}'),
@@ -469,12 +469,82 @@ def countychart(county):
 
 countycharts=Panel(child=
                        layout(
-                       [[countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'),Spacer(width=30, height=10, sizing_mode='fixed')]],
+                       [[countychart('Sacramento'),countychart('Riverside'),countychart('Placer'),countychart('Yolo'),Spacer(width=30, height=10, sizing_mode='fixed')]],
                        sizing_mode='stretch_width'
                        ),
                    title='Region'
                 )
+#%% Regional Order
+def region_map():
+    Northern_California= ['Del Norte', 'Glenn', 'Humboldt', 'Lake', 'Lassen', 'Mendocino', 'Modoc', 'Shasta', 'Siskiyou', 'Tehama', 'Trinity']
+    Bay_Area= ['Alameda', 'Contra Costa', 'Marin', 'Monterey', 'Napa', 'San Francisco', 'San Mateo', 'Santa Clara', 'Santa Cruz', 'Solano', 'Sonoma']
+    Greater_Sacramento= ['Alpine', 'Amador', 'Butte', 'Colusa', 'El Dorado', 'Nevada', 'Placer', 'Plumas', 'Sacramento', 'Sierra', 'Sutter', 'Yolo', 'Yuba']
+    San_Joaquin_Valley= ['Calaveras', 'Fresno', 'Kern', 'Kings', 'Madera', 'Mariposa', 'Merced', 'San Benito', 'San Joaquin', 'Stanislaus', 'Tulare', 'Tuolumne']
+    Southern_California= ['Imperial', 'Inyo', 'Los Angeles', 'Mono', 'Orange', 'Riverside', 'San Bernardino', 'San Diego', 'San Luis Obispo', 'Santa Barbara', 'Ventura']
+    Regions={'Northern_California':Northern_California,'Bay_Area':Bay_Area,'Greater_Sacramento':Greater_Sacramento,
+             'San_Joaquin_Valley':San_Joaquin_Valley,'Southern_California':Southern_California}
+    tmp=[]
+    for region in Regions:
+        for county in Regions[region]:
+            tmp.append([county,region])
+    regions_df=pd.DataFrame(tmp,columns=['County','region'])
+    orig_num_records=len(caData)
+    tmp2=caData.merge(regions_df,how='left',on='County')
+    new_Num_records=len(tmp2)
+    if orig_num_records==new_Num_records:
+        return tmp2
+    else:
+        print("Unexpected cartesian when joining regions to data. Join canceled.")
+        return caData
+        
+caData=region_map()
+icu_data=caData.groupby(by=['Date','region']).sum()[['icu_available_beds','ICU_capacity','noncovid_icu','icu_suspected_covid_patients','icu_covid_confirmed_patients']]
+icu_data['avail_percent']=icu_data['icu_available_beds']/icu_data['ICU_capacity']
+icu_data['noncovid_percent']=icu_data['noncovid_icu']/icu_data['ICU_capacity']
+icu_data['covid_percent']=(icu_data['icu_suspected_covid_patients']+icu_data['icu_covid_confirmed_patients'])/icu_data['ICU_capacity']
+icu_data.reset_index(inplace=True)
 
+def regioncompare(metric,metricname):
+    palette=Category20[20]
+    colors = itertools.cycle(palette)
+    p = figure(title=metricname, x_axis_type='datetime', plot_width=200, plot_height=400,
+               tools="pan,wheel_zoom,reset,save",
+                y_range=Range1d(0,math.ceil(icu_data[metric].max()), bounds=(0,math.ceil(icu_data[metric].max()*1.5/10)*10)),
+                active_scroll='wheel_zoom',
+                sizing_mode='stretch_width'
+                )
+    grp_list = icu_data.region.unique()
+    grp_list=sorted(list(grp_list))
+    
+    lines={}
+    for i,color in zip(range(len(grp_list)),colors):
+        source = ColumnDataSource(
+        data={'Date':icu_data.loc[icu_data.region == grp_list[i]].Date,
+               'Region':icu_data.loc[icu_data.region == grp_list[i]].region,
+               metric:icu_data.loc[icu_data.region == grp_list[i]][metric]})
+        lines[grp_list[i]]=p.line(x='Date',
+                y=metric,
+                source=source,
+                legend_label = grp_list[i],
+                color=color,
+                alpha=1,
+                width=2,
+                muted_width=1,
+                muted_color = 'grey',
+                muted_alpha=0.4,
+                muted = False)
+    hover = HoverTool(tooltips =[
+         ('Region','@Region'),('Date','@Date{%F}'),(metricname,'@'+metric+'{0.0%}')],
+         formatters={'@Date': 'datetime'})
+    p.add_tools(hover)
+    p.yaxis.formatter=NumeralTickFormatter(format="0%")
+    p.legend.location = "top_left"
+    p.legend.click_policy="mute"
+    p.legend.label_text_font_size="8pt"
+
+    return p
+
+#show(regioncompare('avail_percent','available'))
 
 #%% HTML Generation
 about_html="""
