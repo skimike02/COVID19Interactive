@@ -469,7 +469,7 @@ def countychart(county):
 
 countycharts=Panel(child=
                        layout(
-                       [[countychart('Sacramento'),countychart('Riverside'),countychart('Placer'),countychart('Yolo'),Spacer(width=30, height=10, sizing_mode='fixed')]],
+                       [[countychart('Sacramento'),countychart('El Dorado'),countychart('Placer'),countychart('Yolo'),Spacer(width=30, height=10, sizing_mode='fixed')]],
                        sizing_mode='stretch_width'
                        ),
                    title='Region'
