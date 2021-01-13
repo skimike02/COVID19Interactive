@@ -149,19 +149,23 @@ charts=['Tests','Cases','Deaths']
 #%% National
 
 #All states in one chart
-def statecompare(metric,metricname,foci):
+def statecompare(df,metric,metricname,universe,foci,**kwargs):
+    formatter=kwargs.get('format','thousands')
+    if formatter=='percent':
+        hoverformatter='{0.0%}'
+        yformatter="0%"
+    else:
+        hoverformatter='{0,}'
+        yformatter="0,"        
     palette=Category20[20]
     colors = itertools.cycle(palette)
     p = figure(title=metricname, x_axis_type='datetime', plot_width=200, plot_height=400,
                tools="pan,wheel_zoom,reset,save",
-                y_range=Range1d(0,math.ceil(df[metric].max()), bounds=(0,math.ceil(df[metric].max()*1.5/10)*10)),
+               # y_range=Range1d(0,math.ceil(df[metric].max()), bounds=(0,math.ceil(df[metric].max()*1.5/10)*10)),
                 active_scroll='wheel_zoom',
                 sizing_mode='stretch_width'
                 )
-    largest_positive_percap = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg_percap']].groupby('state').sum().nlargest(10,'positiveIncrease_avg_percap').index)
-    largest_positive = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg']].groupby('state').sum().nlargest(10,'positiveIncrease_avg').index)
-    grp_list = largest_positive_percap.union(largest_positive)
-    grp_list.update(['NY','NJ','CA'])
+    grp_list=universe
     grp_list=sorted(list(grp_list))
     
     lines={}
@@ -184,10 +188,10 @@ def statecompare(metric,metricname,foci):
     for focus in foci:
         lines[focus].muted=False
     hover = HoverTool(tooltips =[
-         ('State','@state'),('Date','@Date{%F}'),(metricname,'@'+metric+'{0,}')],
+         ('State','@state'),('Date','@Date{%F}'),(metricname,'@'+metric+hoverformatter)],
          formatters={'@Date': 'datetime'})
     p.add_tools(hover)
-    p.yaxis.formatter=NumeralTickFormatter(format="0,")
+    p.yaxis.formatter=NumeralTickFormatter(format=yformatter)
     p.legend.location = "top_left"
     p.legend.click_policy="mute"
     p.legend.label_text_font_size="8pt"
@@ -195,8 +199,8 @@ def statecompare(metric,metricname,foci):
     return p
 
 def percap(metric,metricname,foci):
-    gross=Panel(child=statecompare(metric,metricname,foci),title='Gross')
-    percap_chart=statecompare(metric+'_percap',metricname+' per 100k population',foci)
+    gross=Panel(child=statecompare(df,metric,metricname,universe,foci),title='Gross')
+    percap_chart=statecompare(df,metric+'_percap',metricname+' per 100k population',universe,foci)
     percap_chart.hover._property_values['tooltips'][2]=(metricname+' per 100k', '@'+metric+'_percap{0.0}')
     percap_chart.yaxis.formatter=NumeralTickFormatter(format="0.0")
     percap=Panel(child=percap_chart,title='Per 100k')
@@ -204,12 +208,18 @@ def percap(metric,metricname,foci):
 
 padding=Spacer(width=30, height=10, sizing_mode='fixed')
 
+
 foci=['NY','NJ','CA']
+
+largest_positive_percap = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg_percap']].groupby('state').sum().nlargest(10,'positiveIncrease_avg_percap').index)
+largest_positive = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg']].groupby('state').sum().nlargest(10,'positiveIncrease_avg').index)
+universe = largest_positive_percap.union(largest_positive)
+universe.update(foci)
 
 state_cases=percap('positiveIncrease_avg','New Cases (7-day avg)',foci)
 state_hospitalizations=percap('hospitalizedCurrently','Hospitalized',foci)
 state_deaths=percap('deathIncrease_avg','Deaths (7-day avg)',foci)
-positivity=statecompare('positivity','Positivity (7-day avg)',foci)
+positivity=statecompare(df,'positivity','Positivity (7-day avg)',universe,foci)
 
 positivity.y_range=Range1d(0,0.6,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
 positivity.yaxis.formatter=NumeralTickFormatter(format="0%")
@@ -474,6 +484,26 @@ countycharts=Panel(child=
                        ),
                    title='Region'
                 )
+#%% Vaccinations
+vacc=pd.read_csv('https://raw.githubusercontent.com/govex/COVID-19/master/data_tables/vaccine_data/raw_data/vaccine_data_us_state_timeline.csv',sep=',')
+vacc['Date']=pd.to_datetime(vacc.date)
+vacc=vacc.merge(statepop,how='left',left_on='Province_State',right_on='STNAME')
+
+vacc['pct_shipped_administered']=vacc.doses_admin_total/vacc.doses_shipped_total
+vacc['pct_pop_vaccinated']=vacc['doses_admin_total']/vacc['pop']
+vacc['state']=vacc.stabbr
+
+doses_admin=statecompare(vacc,'pct_shipped_administered','Percent of doses received that have been administered',universe,['CA'],format='percent')
+pop_vaccinated=statecompare(vacc,'pct_pop_vaccinated','Doses administered as percent of population',universe,['CA'],format='percent')
+
+vaccinecharts=Panel(child=
+                       layout(
+                       [[doses_admin,pop_vaccinated,Spacer(width=30, height=10, sizing_mode='fixed')]],
+                       sizing_mode='stretch_width'
+                       ),
+                   title='Vaccination'
+                )
+
 #%% Regional Order
 def region_map():
     Northern_California= ['Del Norte', 'Glenn', 'Humboldt', 'Lake', 'Lassen', 'Mendocino', 'Modoc', 'Shasta', 'Siskiyou', 'Tehama', 'Trinity']
@@ -582,6 +612,7 @@ about=Panel(child=Div(text=about_html),title='About')
 page=Tabs(tabs=[nationalcharts,
                 statecharts,
                 countycharts,
+                vaccinecharts,
                 about
                 ])
 print("saving file to "+fileloc+'COVID19.html')
