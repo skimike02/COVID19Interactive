@@ -485,20 +485,47 @@ countycharts=Panel(child=
                    title='Region'
                 )
 #%% Vaccinations
-vacc=pd.read_csv('https://raw.githubusercontent.com/govex/COVID-19/master/data_tables/vaccine_data/raw_data/vaccine_data_us_state_timeline.csv',sep=',')
-vacc['Date']=pd.to_datetime(vacc.date)
-vacc=vacc.merge(statepop,how='left',left_on='Province_State',right_on='STNAME')
+#vacc=pd.read_csv('https://raw.githubusercontent.com/govex/COVID-19/master/data_tables/vaccine_data/raw_data/vaccine_data_us_state_timeline.csv',sep=',')
+#vacc['Date']=pd.to_datetime(vacc.date)
+#vacc=vacc.merge(statepop,how='left',left_on='Province_State',right_on='STNAME')
 
-vacc['pct_shipped_administered']=vacc.doses_admin_total/vacc.doses_shipped_total
-vacc['pct_pop_vaccinated']=vacc['doses_admin_total']/vacc['pop']
-vacc['state']=vacc.stabbr
+#vacc['pct_shipped_administered']=vacc.doses_admin_total/vacc.doses_shipped_total
+#vacc['pct_pop_vaccinated']=vacc['doses_admin_total']/vacc['pop']
+#vacc['state']=vacc.stabbr
 
-doses_admin=statecompare(vacc,'pct_shipped_administered','Percent of doses received that have been administered',universe,['CA'],format='percent')
-pop_vaccinated=statecompare(vacc,'pct_pop_vaccinated','Doses administered as percent of population',universe,['CA'],format='percent')
+def update_vacc_data():
+    try:
+        vacc_df=pd.read_pickle(fileloc+'cdc_vaccination.pkl')
+        vacc_df.set_index(keys=['Date','Location'],inplace=True)
+        new_dataset=False
+    except:
+        new_dataset=True
+        vacc_df=pd.DataFrame()
+        print('no existing data. starting new data set')
+    url='https://covid.cdc.gov/covid-data-tracker/COVIDData/getAjaxData?id=vaccination_data'
+    tmp=requests.get(url).content.decode("utf-8")
+    new_data=pd.DataFrame(json.loads(tmp)['vaccination_data'])
+    new_data['Date']=pd.to_datetime(new_data.Date)
+    new_data.set_index(keys=['Date','Location'],inplace=True)
+    if ~new_dataset:
+        vacc_df=pd.concat([vacc_df[~vacc_df.index.isin(new_data.index)], new_data])
+    else:
+        vacc_df=new_data
+    vacc_df.reset_index(inplace=True)
+    vacc_df.to_pickle(fileloc+'cdc_vaccination.pkl')
+    return vacc_df
+
+vacc_data=update_vacc_data()
+vacc_data.rename(columns={"Location": "state"}, inplace=True)
+vacc_data['pct_dose1']=vacc_data['Administered_Dose1_Per_100K']/100000
+vacc_data['pct_dose2']=vacc_data['Administered_Dose2_Per_100K']/100000
+
+first_dose_admin=statecompare(vacc_data,'pct_dose1','Percent of population with first dose',universe,['CA'],format='percent')
+pop_vaccinated=statecompare(vacc_data,'pct_dose2','Percent of population vaccinated',universe,['CA'],format='percent')
 
 vaccinecharts=Panel(child=
                        layout(
-                       [[doses_admin,pop_vaccinated,Spacer(width=30, height=10, sizing_mode='fixed')]],
+                       [[first_dose_admin,pop_vaccinated,Spacer(width=30, height=10, sizing_mode='fixed')]],
                        sizing_mode='stretch_width'
                        ),
                    title='Vaccination'
