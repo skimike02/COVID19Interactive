@@ -609,6 +609,8 @@ about_html="""
 <p>Source data and documentation available at <a href="https://github.com/skimike02/COVID19Interactive">https://github.com/skimike02/COVID19Interactive</a></p>
 <p>National and state data pulled from the <a href="https://covidtracking.com/">COVID Tracking Project</a>, a product of the Atlantic.</p>
 <p>CA State and County level data pulled from the <a href="https://data.ca.gov/group/covid-19">CA Open Data Portal</a></p>
+<p>Vaccination data pulled from <a href="https://covid.cdc.gov/covid-data-tracker/#vaccinations">CDC Data Tracker</a></p>
+
 <br>
 <b>Additional Resources:</b><br>
 Official Sites:<br>
@@ -626,6 +628,7 @@ Official Sites:<br>
 <a href="https://vac-lshtm.shinyapps.io/ncov_vaccine_landscape/">Vaccine Tracker w/ Gantt View</a><br>
 <a href="https://www.nytimes.com/interactive/2020/science/coronavirus-vaccine-tracker.html">NYT Vaccine Tracker</a><br>
 <a href="https://www.raps.org/news-and-articles/news-articles/2020/3/covid-19-vaccine-tracker">RAPS Vaccine Tracker</a><br>
+<a href="https://berthub.eu/articles/posts/reverse-engineering-source-code-of-the-biontech-pfizer-vaccine/">Description of the vaccine source code</a><br>
 <br>Economic Impacts:<br>
 <a href="https://tracktherecovery.org/">Opportunity Insights Tracker</a><br>
 <a href="https://help.cuebiq.com/hc/en-us/articles/360041285051-Reading-Cuebiq-s-COVID-19-Mobility-Insights">Cuebiq Mobility Tracker</a><br>
