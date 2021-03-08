@@ -536,7 +536,7 @@ def countychart(county):
     deaths.x_range=cases.x_range
     ICU.x_range=cases.x_range
     return layout([[cases],[deaths],[ICU]],sizing_mode='stretch_width')
-show(countychart('Sacramento'))
+
 
 countycharts=Panel(child=
                        layout(
