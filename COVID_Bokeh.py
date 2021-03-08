@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 To do:
+    Find and add national/state hospitalization and Positivity/Testing values
     County Charts
         -Add county hospitalization/ICU charts
         -Add mouseover to ICU charts
@@ -21,6 +22,8 @@ import geopandas as gpd
 import jinja2
 import logging
 import os
+from bs4 import BeautifulSoup
+
 
 import config
 
@@ -28,7 +31,7 @@ fileloc=config.fileloc
 mode=config.mode
 base_url=config.base_url
 dir_path = os.path.dirname(os.path.abspath(__file__))
-
+filename=dir_path+'\\data.pkl'
 
 if not os.path.exists(config.log_dir):
     os.makedirs(config.log_dir)
@@ -43,17 +46,57 @@ counties=['Sacramento','El Dorado','Placer','Yolo']
 #Tests and National Stats
 print("Fetching national statistics...")
 logging.info('%s Fetching national statistics', datetime.datetime.now())
-url='https://covidtracking.com/api/v1/states/daily.json'
-df=pd.read_json(url)
-logging.info('%s fetched', datetime.datetime.now())
-df['Date']=pd.to_datetime(df.date, format='%Y%m%d', errors='ignore')
-df=df[df['Date']>='2020-03-15']
+#url='https://covidtracking.com/api/v1/states/daily.json'
+#df=pd.read_json(url)
+#logging.info('%s fetched', datetime.datetime.now())
+#df['Date']=pd.to_datetime(df.date, format='%Y%m%d', errors='ignore')
+#df=df[df['Date']>='2020-03-15']
+
+#CDC Cases and Deaths
+try:
+    data=pd.read_pickle(filename)
+    start=(data.Date.max()+datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+    print(f'old data loaded. starting new data load from {start}')
+except:
+    print('no data found. starting new dataset')
+    data=pd.DataFrame()
+    start='2020-03-01'
+    
+def cdc_cases(start):        
+    end=(datetime.datetime.now()-datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+    enddate=datetime.datetime.strptime(end, '%Y-%m-%d')
+    startdate=datetime.datetime.strptime(start, '%Y-%m-%d')
+    numdays=(enddate-startdate).days+1
+    date_list = [startdate + datetime.timedelta(days=x) for x in range(numdays)]
+    df=pd.DataFrame()
+    for date in date_list:
+        datestring=date.strftime('%Y-%m-%d')
+        print(f"fetching data for {date}")
+        url=f'https://data.cdc.gov/resource/9mfq-cb36.json?submission_date={datestring}'
+        df_day=pd.read_json(url)
+        df=df.append(df_day)
+    return df
+
+data=data.append(cdc_cases(start))
+data['Date']=pd.to_datetime(data.submission_date).dt.date
+data.to_pickle(filename)
+
+#National PCR Testing Data
+r=requests.get('https://healthdata.gov/dataset/covid-19-diagnostic-laboratory-testing-pcr-testing-time-series')
+soup = BeautifulSoup(r.content, 'html.parser')
+csv_link=soup.find_all('a',{"class": "btn btn-primary data-link"})[0]['href']
+testing=pd.read_csv(csv_link).pivot(index=['state','date'], columns='overall_outcome', values='new_results_reported').reset_index()
+testing['total_tests']=testing.Inconclusive+testing.Negative+testing.Positive
+testing['Date']=pd.to_datetime(testing.date, format='%Y-%m-%d').dt.date
+data=data.merge(testing,on=['state','Date'])
 
 logging.info('%s Fetching state mapping', datetime.datetime.now())
 url="https://gist.githubusercontent.com/mshafrir/2646763/raw/8b0dbb93521f5d6889502305335104218454c2bf/states_hash.json"
 state_mapping=json.loads(requests.get(url).content)
 logging.info('%s fetched', datetime.datetime.now())
-df['STATE']=df.state.map(state_mapping).str.upper()
+#df['STATE']=df.state.map(state_mapping).str.upper()
+data['STATE']=data.state.map(state_mapping).str.upper()
+
 
 def rolling_7_avg(df,date,group,field):
     newname=field+'_avg'
@@ -93,15 +136,16 @@ hospital_capacity.rename("hospital_capacity",inplace=True)
 ICU_capacity.rename("ICU_capacity",inplace=True)
 caData=caData.merge(hospital_capacity,left_on='COUNTY', right_index=True, how='left').merge(ICU_capacity,left_on='COUNTY', right_index=True, how='left')
 
-#County Population
-print("Getting county populations...")
+#Population
+print("Getting populations...")
 logging.info('%s Fetching county population data', datetime.datetime.now())
 url='https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/co-est2019-alldata.csv'
 df4=pd.read_csv(url,delimiter=',',encoding='latin-1')
 logging.info('%s fetched', datetime.datetime.now())
 statepop=df4.groupby('STNAME').sum().POPESTIMATE2019.to_frame(name="pop")
 statepop['STATE']=statepop.index.str.upper()
-df=df.merge(statepop,how='left',on='STATE')
+#df=df.merge(statepop,how='left',on='STATE')
+data=data.merge(statepop,how='left',on='STATE')
 df4=df4[(df4['STATE']==6)&(df4['COUNTY']>0)]
 df4['county']=df4['CTYNAME'].str.replace(' County','').str.upper()
 df4=df4[['county','POPESTIMATE2019']]
@@ -122,13 +166,18 @@ caData['deathIncrease']=caData['newcountdeaths'].clip(0)
 caData['noncovid_icu']=caData.ICU_capacity-caData.ICU-caData.icu_available_beds
 
 
-fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
-
+#fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
+#for field in fields:
+#    df=rolling_7_avg(df,'Date','state',field)
+    
+fields=['new_case','new_death','Positive','total_tests']
 for field in fields:
-    df=rolling_7_avg(df,'Date','state',field)
+    data=rolling_7_avg(data,'Date','state',field)
 
-df['positivity']=df.positiveIncrease_avg/df.totalTestResultsIncrease_avg
-df.loc[df.positivity > 1,'positivity'] = 1
+#df['positivity']=df.positiveIncrease_avg/df.totalTestResultsIncrease_avg
+#df.loc[df.positivity > 1,'positivity'] = 1
+
+data['positivity']=data.Positive_avg/data.total_tests_avg
 
 fields=['positiveIncrease','deathIncrease']
 
@@ -139,9 +188,13 @@ fields=['positiveIncrease','deathIncrease','positiveIncrease_avg','deathIncrease
 for field in fields:
     caData[field+'_percap']=caData[field]/caData['pop']*100000
 
-fields=['totalTestResultsIncrease_avg','deathIncrease_avg','positiveIncrease_avg','hospitalizedCurrently']
+#fields=['totalTestResultsIncrease_avg','deathIncrease_avg','positiveIncrease_avg','hospitalizedCurrently']
+#for field in fields:
+#    df[field+'_percap']=df[field]/df['pop']*100000
+    
+fields=['new_case','new_death','new_case_avg','new_death_avg']
 for field in fields:
-    df[field+'_percap']=df[field]/df['pop']*100000
+    data[field+'_percap']=data[field]/data['pop']*100000
 
 regions=['US',state]
 charts=['Tests','Cases','Deaths']
@@ -198,7 +251,7 @@ def statecompare(df,metric,metricname,universe,foci,**kwargs):
 
     return p
 
-def percap(metric,metricname,foci):
+def percap(df,metric,metricname,foci):
     gross=Panel(child=statecompare(df,metric,metricname,universe,foci),title='Gross')
     percap_chart=statecompare(df,metric+'_percap',metricname+' per 100k population',universe,foci)
     percap_chart.hover._property_values['tooltips'][2]=(metricname+' per 100k', '@'+metric+'_percap{0.0}')
@@ -211,28 +264,27 @@ padding=Spacer(width=30, height=10, sizing_mode='fixed')
 
 foci=['NY','NJ','CA']
 
-largest_positive_percap = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg_percap']].groupby('state').sum().nlargest(10,'positiveIncrease_avg_percap').index)
-largest_positive = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg']].groupby('state').sum().nlargest(10,'positiveIncrease_avg').index)
+largest_positive_percap = set(data[data.Date>(datetime.datetime.now()+datetime.timedelta(days=-7)).date()][['state','new_case_avg_percap']].groupby('state').sum().nlargest(10,'new_case_avg_percap').index)
+#largest_positive_percap = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg_percap']].groupby('state').sum().nlargest(10,'positiveIncrease_avg_percap').index)
+largest_positive = set(data[data.Date>(datetime.datetime.now()+datetime.timedelta(days=-7)).date()][['state','new_case_avg']].groupby('state').sum().nlargest(10,'new_case_avg').index)
+#largest_positive = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg']].groupby('state').sum().nlargest(10,'positiveIncrease_avg').index)
 universe = largest_positive_percap.union(largest_positive)
 universe.update(foci)
 
-state_cases=percap('positiveIncrease_avg','New Cases (7-day avg)',foci)
-state_hospitalizations=percap('hospitalizedCurrently','Hospitalized',foci)
-state_deaths=percap('deathIncrease_avg','Deaths (7-day avg)',foci)
-positivity=statecompare(df,'positivity','Positivity (7-day avg)',universe,foci)
+state_cases=percap(data,'new_case_avg','New Cases (7-day avg)',foci)
+#state_hospitalizations=percap('hospitalizedCurrently','Hospitalized',foci)
+state_deaths=percap(data,'new_death_avg','Deaths (7-day avg)',foci)
+positivity=statecompare(data,'positivity','Positivity (7-day avg)',universe,foci)
 
-positivity.y_range=Range1d(0,0.6,bounds=(0,math.ceil(df['positivity'].max()*1.05/10)*10))
+positivity.y_range=Range1d(0,0.6,bounds=(0,math.ceil(data['positivity'].max()*1.05/10)*10))
 positivity.yaxis.formatter=NumeralTickFormatter(format="0%")
 positivity.hover._property_values['tooltips'][2]=('Positivity (7-day avg)', '@positivity{0.0%}')
 
-state_deaths.tabs[0].child.y_range=Range1d(0,math.ceil(df[~df.state.isin(['NY','NJ'])].deathIncrease_avg.max()*1.05), bounds=(0,math.ceil(df.deathIncrease_avg.max()*1.5)))
+state_deaths.tabs[0].child.y_range=Range1d(0,math.ceil(data[~data.state.isin(['NY','NJ'])].new_death_avg.max()*1.05), bounds=(0,math.ceil(data.new_death_avg.max()*1.5)))
 
-nation_sum=df.groupby('Date').sum()
-nation_sum['positivity_avg']=nation_sum.positiveIncrease_avg/nation_sum.totalTestResultsIncrease_avg
-nation_sum['positivity']=nation_sum.positiveIncrease/nation_sum.totalTestResultsIncrease
-
-fields=['totalTestResultsIncrease','positiveIncrease']
-
+nation_sum=data.groupby('Date').sum()
+nation_sum['positivity_avg']=nation_sum.new_case_avg/nation_sum.total_tests_avg
+nation_sum['positivity']=nation_sum.new_case/nation_sum.total_tests
 
 source=ColumnDataSource(nation_sum)
 nation=figure(title='National', x_axis_type='datetime', plot_width=200, plot_height=400,
@@ -240,24 +292,24 @@ nation=figure(title='National', x_axis_type='datetime', plot_width=200, plot_hei
                 active_scroll='wheel_zoom',
                 sizing_mode='stretch_width'
                 )
-nation.extra_y_ranges = {"deaths": Range1d(start=0, end=df.groupby('Date').sum().deathIncrease.max())}
+nation.extra_y_ranges = {"deaths": Range1d(start=0, end=data.groupby('Date').sum().new_death.max())}
 nation.add_layout(LinearAxis(y_range_name="deaths", axis_label='Deaths'), 'right')
 nation.yaxis.formatter=NumeralTickFormatter(format="0,")
 
-nation.line(x='Date', y='deathIncrease_avg', source=source,legend_label = 'Avg Deaths', color='red',y_range_name="deaths",width=2)
-nation.line(x='Date', y='deathIncrease', source=source,legend_label = 'Daily Deaths', color='red',y_range_name="deaths",alpha=0.2)
-nation.line(x='Date', y='hospitalizedCurrently', source=source,legend_label = 'Hospitalized', color='orange',width=2)
-nation.line(x='Date', y='positiveIncrease_avg', source=source,legend_label = 'Avg Cases', color='green',width=2)
-nation.line(x='Date', y='positiveIncrease', source=source,legend_label = 'Daily Cases', color='green',alpha=0.2)
-nation.yaxis[0].axis_label = 'Cases, Hospitalization'
+nation.line(x='Date', y='new_death_avg', source=source,legend_label = 'Avg Deaths', color='red',y_range_name="deaths",width=2)
+nation.line(x='Date', y='new_death', source=source,legend_label = 'Daily Deaths', color='red',y_range_name="deaths",alpha=0.2)
+#nation.line(x='Date', y='hospitalizedCurrently', source=source,legend_label = 'Hospitalized', color='orange',width=2)
+nation.line(x='Date', y='new_case_avg', source=source,legend_label = 'Avg Cases', color='green',width=2)
+nation.line(x='Date', y='new_case', source=source,legend_label = 'Daily Cases', color='green',alpha=0.2)
+nation.yaxis[0].axis_label = 'Cases'
 nation.legend.location = "top_left"
 hover = HoverTool(tooltips =[
      ('Date','@Date{%F}'),
-     ('Cases','@positiveIncrease{0,}'),
-     ('Avg Cases','@positiveIncrease_avg{0,}'),
-     ('Hospitalized','@hospitalizedCurrently{0,}'),
-     ('Deaths','@deathIncrease{0,}'),
-     ('Avg Deaths','@deathIncrease_avg{0,}'),
+     ('Cases','@new_case{0,}'),
+     ('Avg Cases','@new_case_avg{0,}'),
+     #('Hospitalized','@hospitalizedCurrently{0,}'),
+     ('Deaths','@new_death{0,}'),
+     ('Avg Deaths','@new_death_avg{0,}'),
      ],
      formatters={'@Date': 'datetime'})
 nation.add_tools(hover)
@@ -280,7 +332,15 @@ nation_positivity.yaxis.formatter=NumeralTickFormatter(format="0%")
 
 
 nationalcharts=Panel(child=
-                         layout([[nation,nation_positivity,padding],[state_cases,positivity,padding],[state_hospitalizations,state_deaths,padding]],
+                         layout([[nation,
+                                  nation_positivity,
+                                  padding],
+                                 [state_cases,
+                                  positivity,
+                                  padding],
+                                 [#state_hospitalizations,
+                                  state_deaths,
+                                  padding]],
                          sizing_mode='stretch_width',
                          ),
                      title='National')
@@ -330,7 +390,7 @@ icu_map=plot_map(merged,'ICU_usage',30,0,title='ICU Usage as of '+data_as_of,lab
 
 #%% State 
 
-source = ColumnDataSource(df[df.state=='CA'])
+source = ColumnDataSource(data[data.state=='CA'])
 
 def statechart(metric,metricname):
     p=figure(x_axis_type='datetime',
@@ -352,9 +412,9 @@ def statechart(metric,metricname):
     padding=Spacer(width=30, height=10, sizing_mode='fixed')
     return(row([p,padding]))
 
-tests=statechart('totalTestResultsIncrease','Tests')
-cases=statechart('positiveIncrease','Cases')
-deaths=statechart('deathIncrease','Deaths')
+tests=statechart('total_tests','Tests')
+cases=statechart('new_case','Cases')
+deaths=statechart('new_death','Deaths')
 
 #Hospitalizations
 ca=caData.groupby(['Date']).sum().sort_values(by=['Date'])
@@ -438,9 +498,9 @@ def countychart(county):
     cases.yaxis.axis_label = 'Cases/100k'
     
     deaths = figure(x_axis_type='datetime',
-                    y_range=Range1d(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*1.05/10)*10, bounds=(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*10))),
+                    #y_range=Range1d(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*1.05/10)*10, bounds=(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*10))),
                    plot_height=300,
-                   plot_width=cases.width,
+                   #plot_width=cases.width,
                    toolbar_location='above',
                    tools=["pan,reset,save,xwheel_zoom",HoverTool(tooltips=[
                    ('Date','@Date{%F}'),
@@ -449,7 +509,7 @@ def countychart(county):
                    ],
                    formatters={'@Date': 'datetime'})],
                    active_scroll='xwheel_zoom',
-                   sizing_mode = 'scale_width')        
+                   sizing_mode = 'stretch_width')        
     deaths.line(x='Date', y='deathIncrease', source=source, color='grey',legend_label='Daily')
     deaths.line(x='Date', y='deathIncrease_avg', source=source, color='blue',width=2, legend_label='7-day average')
     deaths.legend.location = "top_left"
@@ -465,7 +525,7 @@ def countychart(county):
                    ('ICU','@ICU{0,}')
                    ],
                    formatters={'@Date': 'datetime'})],
-                   sizing_mode = 'scale_width',
+                   sizing_mode = 'stretch_width',
             )
     ICU.varea_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', color=['red','yellow','green'], source=source,
                   legend_label=['COVID Cases','Non-COVID Cases','Available Beds'])
@@ -476,6 +536,7 @@ def countychart(county):
     deaths.x_range=cases.x_range
     ICU.x_range=cases.x_range
     return layout([[cases],[deaths],[ICU]],sizing_mode='stretch_width')
+show(countychart('Sacramento'))
 
 countycharts=Panel(child=
                        layout(
