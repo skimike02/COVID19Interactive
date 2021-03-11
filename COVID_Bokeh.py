@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 To do:
-    Find and add national/state hospitalization and Positivity/Testing values
+    Find and add national/state hospitalization data
     County Charts
         -Add county hospitalization/ICU charts
         -Add mouseover to ICU charts
@@ -88,7 +88,7 @@ csv_link=soup.find_all('a',{"class": "btn btn-primary data-link"})[0]['href']
 testing=pd.read_csv(csv_link).pivot(index=['state','date'], columns='overall_outcome', values='new_results_reported').reset_index()
 testing['total_tests']=testing.Inconclusive+testing.Negative+testing.Positive
 testing['Date']=pd.to_datetime(testing.date, format='%Y-%m-%d').dt.date
-data=data.merge(testing,on=['state','Date'])
+data=data.merge(testing,on=['state','Date'],how='left')
 
 logging.info('%s Fetching state mapping', datetime.datetime.now())
 url="https://gist.githubusercontent.com/mshafrir/2646763/raw/8b0dbb93521f5d6889502305335104218454c2bf/states_hash.json"
@@ -580,6 +580,10 @@ vacc_data=update_vacc_data()
 vacc_data.rename(columns={"Location": "state"}, inplace=True)
 vacc_data['pct_dose1']=vacc_data['Administered_Dose1_Per_100K']/100000
 vacc_data['pct_dose2']=vacc_data['Administered_Dose2_Per_100K']/100000
+
+#take more recent data format where available
+vacc_data['pct_dose1']=(vacc_data['Administered_Dose1_Pop_Pct']/100).fillna(vacc_data['pct_dose1'])
+vacc_data['pct_dose2']=(vacc_data['Series_Complete_Pop_Pct']/100).fillna(vacc_data['pct_dose2'])
 
 first_dose_admin=statecompare(vacc_data,'pct_dose1','Percent of population with first dose',universe,['CA'],format='percent')
 pop_vaccinated=statecompare(vacc_data,'pct_dose2','Percent of population vaccinated',universe,['CA'],format='percent')
