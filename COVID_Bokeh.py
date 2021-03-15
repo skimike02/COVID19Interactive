@@ -82,13 +82,22 @@ data['Date']=pd.to_datetime(data.submission_date).dt.date
 data.to_pickle(filename)
 
 #National PCR Testing Data
-r=requests.get('https://healthdata.gov/dataset/covid-19-diagnostic-laboratory-testing-pcr-testing-time-series')
-soup = BeautifulSoup(r.content, 'html.parser')
-csv_link=soup.find_all('a',{"class": "btn btn-primary data-link"})[0]['href']
-testing=pd.read_csv(csv_link).pivot(index=['state','date'], columns='overall_outcome', values='new_results_reported').reset_index()
-testing['total_tests']=testing.Inconclusive+testing.Negative+testing.Positive
-testing['Date']=pd.to_datetime(testing.date, format='%Y-%m-%d').dt.date
+#r=requests.get('https://healthdata.gov/dataset/covid-19-diagnostic-laboratory-testing-pcr-testing-time-series')
+#soup = BeautifulSoup(r.content, 'html.parser')
+#csv_link=soup.find_all('a',{"class": "btn btn-primary data-link"})[0]['href']
+#testing=pd.read_csv(csv_link).pivot(index=['state','date'], columns='overall_outcome', values='new_results_reported').reset_index()
+#testing['total_tests']=testing.Inconclusive+testing.Negative+testing.Positive
+#testing['Date']=pd.to_datetime(testing.date, format='%Y-%m-%d').dt.date
+#data=data.merge(testing,on=['state','Date'],how='left')
+
+testing=pd.read_csv('https://raw.githubusercontent.com/govex/COVID-19/master/data_tables/testing_data/time_series_covid19_US.csv')
+testing['date']=pd.to_datetime(testing.date, format='%m/%d/%y').dt.date
+testing.sort_values(by=['state','date'],inplace=True)
+testing['total_tests']=testing.groupby(['state'])['tests_combined_total'].diff()
+testing['Positive']=testing.groupby(['state'])['cases_conf_probable'].diff()
+testing.rename(columns={'date':'Date'},inplace=True)
 data=data.merge(testing,on=['state','Date'],how='left')
+
 
 logging.info('%s Fetching state mapping', datetime.datetime.now())
 url="https://gist.githubusercontent.com/mshafrir/2646763/raw/8b0dbb93521f5d6889502305335104218454c2bf/states_hash.json"
@@ -109,11 +118,15 @@ def rolling_7_avg(df,date,group,field):
 #CA Data
 print("Getting state case data...")
 logging.info('%s Fetching state data', datetime.datetime.now())
-url='https://data.ca.gov/dataset/590188d5-8545-4c93-a9a0-e230f0db7290/resource/926fd08f-cc91-4828-af38-bd45de97f8c3/download/statewide_cases.csv'
+#url='https://data.ca.gov/dataset/590188d5-8545-4c93-a9a0-e230f0db7290/resource/926fd08f-cc91-4828-af38-bd45de97f8c3/download/statewide_cases.csv'
+url='https://data.chhs.ca.gov/dataset/f333528b-4d38-4814-bebb-12db1f10f535/resource/046cdd2b-31e5-4d34-9ed3-b48cdbc4be7a/download/covid19cases_test.csv'
 caCases=pd.read_csv(url,delimiter=',')
+caCases=caCases[caCases.area_type=='County']
+caCases.rename(columns={'area':'county'},inplace=True)
 logging.info('%s fetched', datetime.datetime.now())
 logging.info('%s Fetching state hospitalization data', datetime.datetime.now())
-url='https://data.ca.gov/dataset/529ac907-6ba1-4cb7-9aae-8966fc96aeef/resource/42d33765-20fd-44b8-a978-b083b7542225/download/hospitals_by_county.csv'
+#url='https://data.ca.gov/dataset/529ac907-6ba1-4cb7-9aae-8966fc96aeef/resource/42d33765-20fd-44b8-a978-b083b7542225/download/hospitals_by_county.csv'
+url='https://data.chhs.ca.gov/dataset/2df3e19e-9ee4-42a6-a087-9761f82033f6/resource/47af979d-8685-4981-bced-96a6b79d3ed5/download/covid19hospitalbycounty.csv'
 caHosp=pd.read_csv(url,delimiter=',')
 logging.info('%s fetched', datetime.datetime.now())
 caHosp = caHosp[pd.notnull(caHosp['todays_date'])]
@@ -161,8 +174,8 @@ caData['ICU_usage']=caData['ICU']/caData['ICU_capacity']*100
 caData['hospital_usage']=caData['hospitalized']/caData['hospital_capacity']*100
 caData.sort_values(by=['county','Date'],inplace=True)
 mask=~(caData.county.shift(1)==caData.county)
-caData['positiveIncrease']=caData['newcountconfirmed'].clip(0)
-caData['deathIncrease']=caData['newcountdeaths'].clip(0)
+caData['positiveIncrease']=caData['cases']
+caData['deathIncrease']=caData['deaths']
 caData['noncovid_icu']=caData.ICU_capacity-caData.ICU-caData.icu_available_beds
 
 
@@ -177,7 +190,7 @@ for field in fields:
 #df['positivity']=df.positiveIncrease_avg/df.totalTestResultsIncrease_avg
 #df.loc[df.positivity > 1,'positivity'] = 1
 
-data['positivity']=data.Positive_avg/data.total_tests_avg
+data['positivity']=(data.Positive_avg/data.total_tests_avg).clip(upper=1,lower=0)
 
 fields=['positiveIncrease','deathIncrease']
 
