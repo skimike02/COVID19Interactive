@@ -686,7 +686,8 @@ about_html="""
 <p><b>Data Sources and Documentation</b></p>
 <p>Source data and documentation available at <a href="https://github.com/skimike02/COVID19Interactive">https://github.com/skimike02/COVID19Interactive</a></p>
 <p>National and state case and death data pulled from the <a href="https://data.cdc.gov/Case-Surveillance/United-States-COVID-19-Cases-and-Deaths-by-State-o/9mfq-cb36">CDC website</a></p>
-<p>Testing data pulled from <a href="https://healthdata.gov/dataset/covid-19-diagnostic-laboratory-testing-pcr-testing-time-series">HHS website</a></p> 
+<!-- <p>Testing data pulled from <a href="https://healthdata.gov/dataset/covid-19-diagnostic-laboratory-testing-pcr-testing-time-series">HHS website</a></p> --!>
+<p>Testing data pulled from <a href="https://github.com/govex/COVID-19/tree/master/data_tables">JHU dataset</a></p> 
 <p>CA State and County level data pulled from the <a href="https://data.ca.gov/group/covid-19">CA Open Data Portal</a></p>
 <p>Vaccination data pulled from <a href="https://covid.cdc.gov/covid-data-tracker/#vaccinations">CDC Data Tracker</a></p>
 
