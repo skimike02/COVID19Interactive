@@ -23,6 +23,10 @@ import jinja2
 import logging
 import os
 from bs4 import BeautifulSoup
+import time
+from random import randint
+from bokeh.models.widgets import DataTable, TableColumn
+import numpy as np
 
 
 import config
@@ -601,9 +605,109 @@ vacc_data['pct_dose2']=(vacc_data['Series_Complete_Pop_Pct']/100).fillna(vacc_da
 first_dose_admin=statecompare(vacc_data,'pct_dose1','Percent of population with first dose',universe,['CA'],format='percent')
 pop_vaccinated=statecompare(vacc_data,'pct_dose2','Percent of population vaccinated',universe,['CA'],format='percent')
 
+def refresh_cvs_data():
+    s=requests.Session()
+    url='https://www.cvs.com/immunizations/covid-19-vaccine'
+    r=s.get(url)
+    
+    headers = {
+        "referer": 'https://www.cvs.com/immunizations/covid-19-vaccine',
+        'sec-ch-ua': '''"Google Chrome";v="89", "Chromium";v="89", ";Not A Brand";v="99"''',
+        'sec-ch-ua-mobile': '?0',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36}'''
+        } 
+    url='https://www.cvs.com/immunizations/covid-19-vaccine.vaccine-status.CA.json?vaccineinfo'
+    r=s.get(url,headers=headers)
+    data=json.loads(r.content)['responsePayloadData']['data']
+    df=pd.DataFrame(data['CA'])
+    df['store']='CVS'
+    df['city']=df.city.str.title()
+    return df
+    
+def make_ra_directory():
+    def store_number(name):
+        num_start=name.find("#")+1
+        num_end=name[num_start:].find(" ")+num_start
+        number=name[num_start:num_end]
+        return number
+    
+    base_url='https://www.riteaid.com/locations/'
+    state='ca'
+    r=requests.get(base_url+state+'.html')
+    soup = BeautifulSoup(r.content)
+    directory=[]
+    for link in soup.find_all('a',attrs={"class": "c-directory-list-content-item-link"}):
+        print(f''''fetching {base_url+link['href']}...''')
+        r=requests.get(base_url+link['href'])
+        soup = BeautifulSoup(r.content)
+        city=link.text
+        if soup.find('span',attrs={'class':'directory-list-title'})==None:
+            name=soup.find('h1',attrs={"class": "Nap-title Text--h1"}).text
+            store_num=store_number(name)
+            address=soup.find('span',attrs={"class": "c-address-street-1"}).text
+            directory.append((store_num, city, address))
+        else:
+            for store in soup.find_all('div',attrs={'class':'c-location-grid-item'}):
+                name=store.find('a',attrs={'itemprop':'url'}).text
+                store_num=store_number(name)
+                address=store.find('span',attrs={"class": "c-address-street-1"}).text
+                directory.append((store_num, city, address))
+        time.sleep(randint(1,40)/20)
+    ra=pd.DataFrame(directory)
+    ra.rename(columns={0:'store_number',1:'city',2:'address'},inplace=True)
+    return ra
+
+try:
+    ra=pd.read_pickle('rite_aid_stores.pkl')
+except:
+    ra=make_ra_directory()
+    ra.to_pickle('rite_aid_stores.pkl')
+
+#Refresh Rite Aid Data
+def refresh_ra_data():
+    store_numbers=ra.store_number
+    base_url='https://www.riteaid.com/services/ext/v2/vaccine/checkSlots?storeNumber='
+    ra_avail=[]
+    for i in range(0,len(store_numbers)):
+        url=base_url+store_numbers[i]
+        print(f'checking store number {i}:{store_numbers[i]}')
+        r=requests.get(url)
+        try:
+            avail=json.loads(r.content)['Data']['slots']['1']
+        except:
+            avail=False
+            print(f'error. response received:{r.content}')
+        if avail:
+            ra_avail.append(store_numbers[i])
+    
+    ra['store']='Rite Aid'
+    ra['state']='CA'
+    ra["status"] = np.where(ra["store_number"].isin(ra_avail), "Available", "Fully Booked")
+    return ra
+
+df_cvs=refresh_cvs_data()
+df_ra=refresh_ra_data()
+df=df_cvs.append(df_ra)
+df_avail=df[df.status=='Available']
+df_avail.sort_values(by=['city','store','address'])
+
+Columns = [TableColumn(field=Ci, title=Ci.title()) for Ci in df_avail.columns] # bokeh columns
+avail_vaccine_locations = DataTable(columns=Columns, source=ColumnDataSource(df_avail)) # bokeh table
+now=datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S UTC%z")
+chart_info="""
+<p><b>California Vaccine Appointment Availability as of {now}</b></p>
+<p><a href="https://www.cvs.com/vaccine/intake/store/covid-screener/covid-qns">CVS signup site</a></p>
+<p><a href="https://www.riteaid.com/covid-vaccine-apt">Rite Aid signup site</a></p>
+"""
+
 vaccinecharts=Panel(child=
                        layout(
-                       [[first_dose_admin,pop_vaccinated,Spacer(width=30, height=10, sizing_mode='fixed')]],
+                       [[first_dose_admin,pop_vaccinated,Spacer(width=30, height=10, sizing_mode='fixed')],
+                        [Div(chart_info)],
+                        [avail_vaccine_locations]],
                        sizing_mode='stretch_width'
                        ),
                    title='Vaccination'

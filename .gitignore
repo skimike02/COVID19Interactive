@@ -4,3 +4,4 @@ config.py
 *.pyc
 cdc_vaccination.pkl
 data.pkl
+data.pkl
