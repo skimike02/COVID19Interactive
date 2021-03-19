@@ -697,7 +697,7 @@ df_avail.sort_values(by=['city','store','address'])
 Columns = [TableColumn(field=Ci, title=Ci.title()) for Ci in df_avail.columns] # bokeh columns
 avail_vaccine_locations = DataTable(columns=Columns, source=ColumnDataSource(df_avail)) # bokeh table
 now=datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S UTC%z")
-chart_info="""
+chart_info=f"""
 <p><b>California Vaccine Appointment Availability as of {now}</b></p>
 <p><a href="https://www.cvs.com/vaccine/intake/store/covid-screener/covid-qns">CVS signup site</a></p>
 <p><a href="https://www.riteaid.com/covid-vaccine-apt">Rite Aid signup site</a></p>
@@ -706,7 +706,7 @@ chart_info="""
 vaccinecharts=Panel(child=
                        layout(
                        [[first_dose_admin,pop_vaccinated,Spacer(width=30, height=10, sizing_mode='fixed')],
-                        [Div(chart_info)],
+                        [Div(text=chart_info)],
                         [avail_vaccine_locations]],
                        sizing_mode='stretch_width'
                        ),
