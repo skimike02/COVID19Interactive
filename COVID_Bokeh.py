@@ -95,12 +95,15 @@ data.to_pickle(filename)
 #data=data.merge(testing,on=['state','Date'],how='left')
 
 testing=pd.read_csv('https://raw.githubusercontent.com/govex/COVID-19/master/data_tables/testing_data/time_series_covid19_US.csv')
-testing['date']=pd.to_datetime(testing.date, format='%m/%d/%y').dt.date
+testing['date']=pd.to_datetime(testing.date).dt.date
 testing.sort_values(by=['state','date'],inplace=True)
 testing['total_tests']=testing.groupby(['state'])['tests_combined_total'].diff()
 testing['Positive']=testing.groupby(['state'])['cases_conf_probable'].diff()
 testing.rename(columns={'date':'Date'},inplace=True)
-data=data.merge(testing,on=['state','Date'],how='left')
+data=data[['submission_date', 'state', 'tot_cases', 'new_case', 'tot_death',
+       'new_death', 'created_at', 'consent_cases', 'consent_deaths',
+       'conf_cases', 'prob_cases', 'pnew_case', 'conf_death', 'prob_death',
+       'pnew_death', 'Date']].merge(testing,on=['state','Date'],how='left')
 
 
 logging.info('%s Fetching state mapping', datetime.datetime.now())
