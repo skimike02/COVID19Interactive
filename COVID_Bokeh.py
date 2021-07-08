@@ -663,12 +663,13 @@ def make_ra_directory():
     ra.rename(columns={0:'store_number',1:'city',2:'address'},inplace=True)
     return ra
 
+"""
 try:
     ra=pd.read_pickle('rite_aid_stores.pkl')
 except:
     ra=make_ra_directory()
     ra.to_pickle('rite_aid_stores.pkl')
-
+"""
 #Refresh Rite Aid Data
 def refresh_ra_data():
     store_numbers=ra.store_number
@@ -691,26 +692,26 @@ def refresh_ra_data():
     ra["status"] = np.where(ra["store_number"].isin(ra_avail), "Available", "Fully Booked")
     return ra
 
-df_cvs=refresh_cvs_data()
-df_ra=refresh_ra_data()
-df=df_cvs.append(df_ra)
-df_avail=df[df.status=='Available']
-df_avail.sort_values(by=['city','store','address'])
+#df_cvs=refresh_cvs_data()
+#df_ra=refresh_ra_data()
+#df=df_cvs.append(df_ra)
+#df_avail=df[df.status=='Available']
+#df_avail.sort_values(by=['city','store','address'])
 
-Columns = [TableColumn(field=Ci, title=Ci.title()) for Ci in df_avail.columns] # bokeh columns
-avail_vaccine_locations = DataTable(columns=Columns, source=ColumnDataSource(df_avail)) # bokeh table
-now=datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S UTC%z")
-chart_info=f"""
-<p><b>California Vaccine Appointment Availability as of {now}</b></p>
-<p><a href="https://www.cvs.com/vaccine/intake/store/covid-screener/covid-qns">CVS signup site</a></p>
-<p><a href="https://www.riteaid.com/covid-vaccine-apt">Rite Aid signup site</a></p>
-"""
+#Columns = [TableColumn(field=Ci, title=Ci.title()) for Ci in df_avail.columns] # bokeh columns
+#avail_vaccine_locations = DataTable(columns=Columns, source=ColumnDataSource(df_avail)) # bokeh table
+#now=datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S UTC%z")
+#chart_info=f"""
+#<p><b>California Vaccine Appointment Availability as of {now}</b></p>
+#<p><a href="https://www.cvs.com/vaccine/intake/store/covid-screener/covid-qns">CVS signup site</a></p>
+#<p><a href="https://www.riteaid.com/covid-vaccine-apt">Rite Aid signup site</a></p>
+#"""
 
 vaccinecharts=Panel(child=
                        layout(
-                       [[first_dose_admin,pop_vaccinated,Spacer(width=30, height=10, sizing_mode='fixed')],
-                        [Div(text=chart_info)],
-                        [avail_vaccine_locations]],
+                       [[first_dose_admin,pop_vaccinated,Spacer(width=30, height=10, sizing_mode='fixed')]],
+#                        [Div(text=chart_info)],
+#                        [avail_vaccine_locations]],
                        sizing_mode='stretch_width'
                        ),
                    title='Vaccination'
