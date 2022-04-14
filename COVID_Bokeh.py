@@ -143,6 +143,8 @@ caData['Date']=pd.to_datetime(caData['date'], format='%Y-%m-%d')
 caData['COUNTY']=caData['county'].str.upper()
 caData.rename(columns={'county':'County'}, inplace=True)
 caData.drop(columns=['date','todays_date'], inplace=True)
+del caHosp
+del caCases
 
 #hospital capacity
 print("Getting hospital capacity...")
