@@ -155,6 +155,7 @@ df3=pd.read_csv(url,delimiter=',')
 logging.info('%s fetched', datetime.datetime.now())
 hospital_capacity=df3[df3['FAC_FDR']=='GENERAL ACUTE CARE HOSPITAL'].groupby('COUNTY_NAME').sum()['BED_CAPACITY']
 ICU_capacity=df3[(df3['FAC_FDR']=='GENERAL ACUTE CARE HOSPITAL')&(df3['BED_CAPACITY_TYPE']=='INTENSIVE CARE')].groupby('COUNTY_NAME').sum()['BED_CAPACITY']
+del df3
 hospital_capacity.rename("hospital_capacity",inplace=True)
 ICU_capacity.rename("ICU_capacity",inplace=True)
 caData=caData.merge(hospital_capacity,left_on='COUNTY', right_index=True, how='left').merge(ICU_capacity,left_on='COUNTY', right_index=True, how='left')
@@ -173,6 +174,7 @@ df4=df4[(df4['STATE']==6)&(df4['COUNTY']>0)]
 df4['county']=df4['CTYNAME'].str.replace(' County','').str.upper()
 df4=df4[['county','POPESTIMATE2019']]
 caData=caData.merge(df4, left_on='COUNTY',right_on='county')
+del df4
 caData.rename(columns={"POPESTIMATE2019": "pop"},inplace=True)
 
 #County Data calculated fields
@@ -376,7 +378,9 @@ def get_geodatasource(gdf):
 
 shapefile = os.path.join(dir_path,'Counties/cb_2018_us_county_500k.shp')
 gdf = gpd.read_file(shapefile)[['NAME','geometry']]
-merged = gdf.merge(caData[caData.Date==caData.Date.max()], left_on = 'NAME', right_on = 'County', how = 'left').drop(columns='Date')
+merged = gdf.merge(caData[caData.Date==caData.Date.max()+pd.DateOffset(-1)],
+                   left_on = 'NAME',
+                   right_on = 'County', how = 'left').drop(columns=['Date','hospitalized_covid_patients','all_hospital_beds','icu_suspected_covid_patients'])
 palette=OrRd9[::-1]
 
 
@@ -414,7 +418,12 @@ icu_map=plot_map(merged,'ICU_usage',30,0,title='ICU Usage as of '+data_as_of,lab
 #%% State 
 print("making state charts...")
 
-source = ColumnDataSource(data[data.state=='CA'])
+source = ColumnDataSource(data[data.state=='CA'].drop(columns=[
+       'cases_probable', 'tests_viral_positive', 'tests_viral_negative',
+       'tests_viral_total', 'tests_antigen_positive', 'tests_antigen_total',
+       'people_viral_positive', 'people_viral_total',
+       'people_antigen_positive', 'people_antigen_total',
+       'encounters_viral_total']))
 
 def statechart(metric,metricname):
     p=figure(x_axis_type='datetime',
