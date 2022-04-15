@@ -182,7 +182,7 @@ caData['ICU']=caData['icu_covid_confirmed_patients']+caData['icu_suspected_covid
 caData['ICU_usage']=caData['ICU']/caData['ICU_capacity']*100
 caData['hospital_usage']=caData['hospitalized']/caData['hospital_capacity']*100
 caData.sort_values(by=['county','Date'],inplace=True)
-mask=~(caData.county.shift(1)==caData.county)
+#mask=~(caData.county.shift(1)==caData.county)
 caData['positiveIncrease']=caData['cases']
 caData['deathIncrease']=caData['deaths']
 caData['noncovid_icu']=caData.ICU_capacity-caData.ICU-caData.icu_available_beds
@@ -191,7 +191,7 @@ caData['noncovid_icu']=caData.ICU_capacity-caData.ICU-caData.icu_available_beds
 #fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
 #for field in fields:
 #    df=rolling_7_avg(df,'Date','state',field)
-    
+print("adding averages and whatnot...")    
 fields=['new_case','new_death','Positive','total_tests']
 for field in fields:
     data=rolling_7_avg(data,'Date','state',field)
@@ -224,6 +224,7 @@ charts=['Tests','Cases','Deaths']
 #%% National
 
 #All states in one chart
+print("making national charts...")
 def statecompare(df,metric,metricname,universe,foci,**kwargs):
     formatter=kwargs.get('format','thousands')
     if formatter=='percent':
@@ -241,8 +242,7 @@ def statecompare(df,metric,metricname,universe,foci,**kwargs):
                 sizing_mode='stretch_width'
                 )
     grp_list=universe
-    grp_list=sorted(list(grp_list))
-    
+    grp_list=sorted(list(grp_list))  
     lines={}
     for i,color in zip(range(len(grp_list)),colors):
         source = ColumnDataSource(
@@ -270,7 +270,6 @@ def statecompare(df,metric,metricname,universe,foci,**kwargs):
     p.legend.location = "top_left"
     p.legend.click_policy="mute"
     p.legend.label_text_font_size="8pt"
-
     return p
 
 def percap(df,metric,metricname,foci):
@@ -368,6 +367,7 @@ nationalcharts=Panel(child=
                      title='National')
 
 #%% Maps
+print("making maps...")
 
 def get_geodatasource(gdf):    
     json_data = json.dumps(json.loads(gdf.to_json()))
@@ -411,6 +411,7 @@ deaths_map=plot_map(merged,'deathIncrease_avg_percap',1,0,title='Daily New Death
 icu_map=plot_map(merged,'ICU_usage',30,0,title='ICU Usage as of '+data_as_of,label='% ICU Usage')
 
 #%% State 
+print("making state charts...")
 
 source = ColumnDataSource(data[data.state=='CA'])
 
@@ -495,6 +496,7 @@ statecharts=Panel(child=
                       title='California')
 
 #%% Counties
+print("making county charts...")
 
 def countychart(county):
     source=ColumnDataSource(caData[caData.County==county].groupby('Date').sum())
@@ -575,6 +577,7 @@ countycharts=Panel(child=
 #vacc['pct_shipped_administered']=vacc.doses_admin_total/vacc.doses_shipped_total
 #vacc['pct_pop_vaccinated']=vacc['doses_admin_total']/vacc['pop']
 #vacc['state']=vacc.stabbr
+print("making vaccine charts...")
 
 def update_vacc_data():
     try:
@@ -673,6 +676,7 @@ except:
     ra.to_pickle('rite_aid_stores.pkl')
 """
 #Refresh Rite Aid Data
+"""
 def refresh_ra_data():
     store_numbers=ra.store_number
     base_url='https://www.riteaid.com/services/ext/v2/vaccine/checkSlots?storeNumber='
@@ -693,7 +697,7 @@ def refresh_ra_data():
     ra['state']='CA'
     ra["status"] = np.where(ra["store_number"].isin(ra_avail), "Available", "Fully Booked")
     return ra
-
+"""
 #df_cvs=refresh_cvs_data()
 #df_ra=refresh_ra_data()
 #df=df_cvs.append(df_ra)
@@ -720,6 +724,7 @@ vaccinecharts=Panel(child=
                 )
 
 #%% Regional Order
+print("making regional comparisons...")
 def region_map():
     Northern_California= ['Del Norte', 'Glenn', 'Humboldt', 'Lake', 'Lassen', 'Mendocino', 'Modoc', 'Shasta', 'Siskiyou', 'Tehama', 'Trinity']
     Bay_Area= ['Alameda', 'Contra Costa', 'Marin', 'Monterey', 'Napa', 'San Francisco', 'San Mateo', 'Santa Clara', 'Santa Cruz', 'Solano', 'Sonoma']
