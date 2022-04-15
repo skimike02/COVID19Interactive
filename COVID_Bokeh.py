@@ -36,6 +36,8 @@ mode=config.mode
 base_url=config.base_url
 dir_path = os.path.dirname(os.path.abspath(__file__))
 filename=dir_path+'\\data.pkl'
+output_file(fileloc+'COVID19.html')
+
 
 if not os.path.exists(config.log_dir):
     os.makedirs(config.log_dir)
@@ -736,17 +738,15 @@ Official Sites:<br>
 """
 about=Panel(child=Div(text=about_html),title='About')
 
-
 page=Tabs(tabs=[nationalcharts,
                 statecharts,
                 countycharts,
-                #vaccinecharts,
                 about
                 ])
+
 print("saving file to "+fileloc+'COVID19.html')
 logging.info('%s saving file to %sCOVID19.html', datetime.datetime.now(), fileloc)
 
-output_file(fileloc+'COVID19.html')
 templateLoader = jinja2.FileSystemLoader(searchpath="./")
 templateEnv = jinja2.Environment(loader=templateLoader)
 TEMPLATE_FILE = os.path.join(dir_path,"home.html")
