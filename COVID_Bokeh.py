@@ -577,6 +577,7 @@ countycharts=Panel(child=
 #vacc['pct_shipped_administered']=vacc.doses_admin_total/vacc.doses_shipped_total
 #vacc['pct_pop_vaccinated']=vacc['doses_admin_total']/vacc['pop']
 #vacc['state']=vacc.stabbr
+"""
 print("making vaccine charts...")
 
 def update_vacc_data():
@@ -591,6 +592,7 @@ def update_vacc_data():
     url='https://covid.cdc.gov/covid-data-tracker/COVIDData/getAjaxData?id=vaccination_data'
     tmp=requests.get(url).content.decode("utf-8")
     new_data=pd.DataFrame(json.loads(tmp)['vaccination_data'])
+    del tmp
     new_data['Date']=pd.to_datetime(new_data.Date)
     new_data.set_index(keys=['Date','Location'],inplace=True)
     if ~new_dataset:
@@ -599,7 +601,7 @@ def update_vacc_data():
         vacc_df=new_data
     vacc_df.reset_index(inplace=True)
     vacc_df.to_pickle(fileloc+'cdc_vaccination.pkl')
-    return vacc_df
+    return vacc_df[['Administered_Dose1_Per_100K','Administered_Dose2_Per_100K']]
 
 vacc_data=update_vacc_data()
 vacc_data.rename(columns={"Location": "state"}, inplace=True)
@@ -620,7 +622,7 @@ vaccinecharts=Panel(child=
                        ),
                    title='Vaccination'
                 )
-
+"""
 #%% Regional Order
 print("making regional comparisons...")
 def region_map():
@@ -735,7 +737,7 @@ about=Panel(child=Div(text=about_html),title='About')
 page=Tabs(tabs=[nationalcharts,
                 statecharts,
                 countycharts,
-                vaccinecharts,
+                #vaccinecharts,
                 about
                 ])
 print("saving file to "+fileloc+'COVID19.html')
