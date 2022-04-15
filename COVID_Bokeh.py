@@ -624,6 +624,7 @@ vaccinecharts=Panel(child=
                 )
 """
 #%% Regional Order
+"""
 print("making regional comparisons...")
 def region_map():
     Northern_California= ['Del Norte', 'Glenn', 'Humboldt', 'Lake', 'Lassen', 'Mendocino', 'Modoc', 'Shasta', 'Siskiyou', 'Tehama', 'Trinity']
@@ -695,8 +696,10 @@ def regioncompare(metric,metricname):
     return p
 
 #show(regioncompare('avail_percent','available'))
+"""
 
 #%% HTML Generation
+print("generating html")
 about_html="""
 <p><b>Data Sources and Documentation</b></p>
 <p>Source data and documentation available at <a href="https://github.com/skimike02/COVID19Interactive">https://github.com/skimike02/COVID19Interactive</a></p>
