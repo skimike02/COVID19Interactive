@@ -21,10 +21,11 @@ import json
 import geopandas as gpd
 import jinja2
 import os
+import gc
 
 import config
 
-debug=True
+debug=False
 
 fileloc=config.fileloc
 mode=config.mode
@@ -113,6 +114,7 @@ caData.rename(columns={'county':'County'}, inplace=True)
 caData.drop(columns=['date','todays_date'], inplace=True)
 del caHosp
 del caCases
+gc.collect()
 
 #hospital capacity
 print("Getting hospital capacity...")
@@ -124,6 +126,9 @@ del df3
 hospital_capacity.rename("hospital_capacity",inplace=True)
 ICU_capacity.rename("ICU_capacity",inplace=True)
 caData=caData.merge(hospital_capacity,left_on='COUNTY', right_index=True, how='left').merge(ICU_capacity,left_on='COUNTY', right_index=True, how='left')
+del hospital_capacity
+del ICU_capacity
+gc.collect()
 
 #Population
 print("Getting populations...")
@@ -138,6 +143,7 @@ df4['county']=df4['CTYNAME'].str.replace(' County','').str.upper()
 df4=df4[['county','POPESTIMATE2019']]
 caData=caData.merge(df4, left_on='COUNTY',right_on='county')
 del df4
+gc.collect()
 caData.rename(columns={"POPESTIMATE2019": "pop"},inplace=True)
 
 #County Data calculated fields
@@ -325,10 +331,26 @@ if debug==True:
     shapefile='Counties/cb_2018_us_county_500k.shp'
 else:
     shapefile=os.path.join(dir_path,'Counties/cb_2018_us_county_500k.shp')
+
 gdf=gpd.read_file(shapefile)[['NAME','geometry']]
+
 merged=gdf.merge(caData[caData.Date==caData.Date.max()+pd.DateOffset(-1)],
                    left_on = 'NAME',
-                   right_on = 'County', how = 'left').drop(columns=['Date','hospitalized_covid_patients','all_hospital_beds','icu_suspected_covid_patients'])
+                   right_on = 'County', how = 'left').drop(columns=['Date','County','hospitalized_covid_patients','all_hospital_beds','icu_suspected_covid_patients',
+                                                                    'area_type', 'population', 'cases',
+                                                                           'cumulative_cases', 'deaths', 'cumulative_deaths', 'total_tests',
+                                                                           'cumulative_total_tests', 'positive_tests', 'cumulative_positive_tests',
+                                                                           'reported_cases', 'cumulative_reported_cases', 'reported_deaths',
+                                                                           'cumulative_reported_deaths', 'reported_tests',
+                                                                           'hospitalized_covid_confirmed_patients',
+                                                                           'hospitalized_suspected_covid_patients', 'icu_covid_confirmed_patients',
+                                                                           'icu_available_beds', 'COUNTY', 'hospital_capacity', 'ICU_capacity',
+                                                                           'county', 'pop', 'hospitalized_confirmed_nonICU',
+                                                                           'hospitalized_suspected_nonICU', 'hospitalized', 'ICU',
+                                                                           'positiveIncrease', 'deathIncrease', 'noncovid_icu',
+                                                                           'positiveIncrease_avg', 'deathIncrease_avg', 'positiveIncrease_percap',
+                                                                           'deathIncrease_percap',
+                                                                           'hospitalized_percap', 'ICU_percap'])
 palette=OrRd9[::-1]
 
 def plot_map(df,metric,high,low,**kwargs):
@@ -360,6 +382,7 @@ hospitalization_map=plot_map(merged,'hospital_usage',30,0,title='Hospitalization
 cases_map=plot_map(merged,'positiveIncrease_avg_percap',30,0,title='Daily New Cases (7-day avg) as of '+data_as_of,label='daily new cases per 100k')
 deaths_map=plot_map(merged,'deathIncrease_avg_percap',1,0,title='Daily New Deaths (7-day avg) as of '+data_as_of,label='daily new deaths per 100k')
 icu_map=plot_map(merged,'ICU_usage',30,0,title='ICU Usage as of '+data_as_of,label='% ICU Usage')
+
 
 #%% State
 print("making state charts...")
@@ -446,7 +469,8 @@ icu.legend.location = "top_left"
 
 statecharts=Panel(child=
                          layout([[tests,cases,deaths],[hospitalizations,icu,Spacer(width=30, height=10, sizing_mode='fixed')],
-                                 [cases_map,hospitalization_map,icu_map,deaths_map,Spacer(width=30, height=10, sizing_mode='fixed')]],
+                                 [cases_map,hospitalization_map,icu_map,deaths_map,Spacer(width=30, height=10, sizing_mode='fixed')]
+                                 ],
                          sizing_mode='scale_width',
                          ),
                       title='California')
@@ -693,7 +717,12 @@ if debug==True:
     TEMPLATE_FILE='home.html'
 else:
     TEMPLATE_FILE = os.path.join(dir_path,"home.html")
+
 with open(TEMPLATE_FILE) as file_:
     template=jinja2.Template(file_.read())
-save(page,title='COVID19',template=template)
 
+del data
+del caData
+del nation_sum
+gc.collect()
+save(page,title='COVID19',template=template)
