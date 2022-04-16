@@ -8,7 +8,7 @@ To do:
 """
 #%% Config
 import pandas as pd
-from bokeh.plotting import figure, show, save, output_file
+from bokeh.plotting import figure, save, output_file
 from bokeh.models import (NumeralTickFormatter,ColumnDataSource,HoverTool, Range1d,Panel,Tabs,Div,
                           LinearAxis, GeoJSONDataSource, LinearColorMapper, ColorBar)
 from bokeh.layouts import layout,row,Spacer
@@ -20,42 +20,27 @@ import requests
 import json
 import geopandas as gpd
 import jinja2
-import logging
 import os
-from bs4 import BeautifulSoup
-import time
-from random import randint
-from bokeh.models.widgets import DataTable, TableColumn
-import numpy as np
-
 
 import config
+
+debug=True
 
 fileloc=config.fileloc
 mode=config.mode
 base_url=config.base_url
-dir_path = os.path.dirname(os.path.abspath(__file__))
-filename=dir_path+'\\data.pkl'
 
-
-if not os.path.exists(config.log_dir):
-    os.makedirs(config.log_dir)
-if not os.path.exists(config.log_dir+config.log_file):
-    with open(config.log_dir+config.log_file,'w+'): pass
-logging.basicConfig(filename=config.log_dir+config.log_file, level=logging.INFO)
-logging.info('%s COVID Dashboard Update Started', datetime.datetime.now())
+if debug==True:
+    filename='data.pkl'
+else:
+    dir_path = os.path.dirname(os.path.abspath(__file__))
+    filename=dir_path+'\\data.pkl'
 
 state='CA'
 counties=['Sacramento','El Dorado','Placer','Yolo']
 #%% Data Imports
 #Tests and National Stats
 print("Fetching national statistics...")
-logging.info('%s Fetching national statistics', datetime.datetime.now())
-#url='https://covidtracking.com/api/v1/states/daily.json'
-#df=pd.read_json(url)
-#logging.info('%s fetched', datetime.datetime.now())
-#df['Date']=pd.to_datetime(df.date, format='%Y%m%d', errors='ignore')
-#df=df[df['Date']>='2020-03-15']
 
 #CDC Cases and Deaths
 try:
@@ -79,21 +64,14 @@ def cdc_cases(start):
         print(f"fetching data for {date}")
         url=f'https://data.cdc.gov/resource/9mfq-cb36.json?submission_date={datestring}'
         df_day=pd.read_json(url)
-        df=df.append(df_day)
+        #df=df.append(df_day)
+        df=pd.concat([df,df_day])
     return df
 
-data=data.append(cdc_cases(start))
+#data=data.append(cdc_cases(start))
+data=pd.concat([data,cdc_cases(start)])
 data['Date']=pd.to_datetime(data.submission_date).dt.date
 data.to_pickle(filename)
-
-#National PCR Testing Data
-#r=requests.get('https://healthdata.gov/dataset/covid-19-diagnostic-laboratory-testing-pcr-testing-time-series')
-#soup = BeautifulSoup(r.content, 'html.parser')
-#csv_link=soup.find_all('a',{"class": "btn btn-primary data-link"})[0]['href']
-#testing=pd.read_csv(csv_link).pivot(index=['state','date'], columns='overall_outcome', values='new_results_reported').reset_index()
-#testing['total_tests']=testing.Inconclusive+testing.Negative+testing.Positive
-#testing['Date']=pd.to_datetime(testing.date, format='%Y-%m-%d').dt.date
-#data=data.merge(testing,on=['state','Date'],how='left')
 
 testing=pd.read_csv('https://raw.githubusercontent.com/govex/COVID-19/master/data_tables/testing_data/time_series_covid19_US.csv')
 testing['date']=pd.to_datetime(testing.date).dt.date
@@ -105,38 +83,27 @@ data=data[['submission_date', 'state', 'tot_cases', 'new_case', 'tot_death',
        'new_death', 'created_at', 'consent_cases', 'consent_deaths',
        'conf_cases', 'prob_cases', 'pnew_case', 'conf_death', 'prob_death',
        'pnew_death', 'Date']].merge(testing,on=['state','Date'],how='left')
+del testing
 
-
-logging.info('%s Fetching state mapping', datetime.datetime.now())
 url="https://gist.githubusercontent.com/mshafrir/2646763/raw/8b0dbb93521f5d6889502305335104218454c2bf/states_hash.json"
 state_mapping=json.loads(requests.get(url).content)
-logging.info('%s fetched', datetime.datetime.now())
-#df['STATE']=df.state.map(state_mapping).str.upper()
 data['STATE']=data.state.map(state_mapping).str.upper()
-
 
 def rolling_7_avg(df,date,group,field):
     newname=field+'_avg'
     df.sort_values(by=[group,date],inplace=True)
-    #averages=df.groupby(group).rolling(7,min_periods=7)[field].mean().reset_index()[field]
     averages=df.reset_index().set_index(date).groupby(group).rolling(7,min_periods=7)[field].mean().reset_index()
     averages.rename(columns={field:newname},inplace=True)
     return df.merge(averages,on=[group,date])
 
 #CA Data
 print("Getting state case data...")
-logging.info('%s Fetching state data', datetime.datetime.now())
-#url='https://data.ca.gov/dataset/590188d5-8545-4c93-a9a0-e230f0db7290/resource/926fd08f-cc91-4828-af38-bd45de97f8c3/download/statewide_cases.csv'
 url='https://data.chhs.ca.gov/dataset/f333528b-4d38-4814-bebb-12db1f10f535/resource/046cdd2b-31e5-4d34-9ed3-b48cdbc4be7a/download/covid19cases_test.csv'
 caCases=pd.read_csv(url,delimiter=',')
 caCases=caCases[caCases.area_type=='County']
 caCases.rename(columns={'area':'county'},inplace=True)
-logging.info('%s fetched', datetime.datetime.now())
-logging.info('%s Fetching state hospitalization data', datetime.datetime.now())
-#url='https://data.ca.gov/dataset/529ac907-6ba1-4cb7-9aae-8966fc96aeef/resource/42d33765-20fd-44b8-a978-b083b7542225/download/hospitals_by_county.csv'
 url='https://data.chhs.ca.gov/dataset/2df3e19e-9ee4-42a6-a087-9761f82033f6/resource/47af979d-8685-4981-bced-96a6b79d3ed5/download/covid19hospitalbycounty.csv'
 caHosp=pd.read_csv(url,delimiter=',')
-logging.info('%s fetched', datetime.datetime.now())
 caHosp = caHosp[pd.notnull(caHosp['todays_date'])]
 caHosp = caHosp[pd.notnull(caHosp['county'])]
 caData=caCases.merge(caHosp, how='left', left_on=['county','date'], right_on=['county','todays_date'])
@@ -149,10 +116,8 @@ del caCases
 
 #hospital capacity
 print("Getting hospital capacity...")
-logging.info('%s Fetching hospital capacity data', datetime.datetime.now())
 url='https://data.chhs.ca.gov/datastore/dump/0997fa8e-ef7c-43f2-8b9a-94672935fa60?q=&sort=_id+asc&fields=FACID%2CFACNAME%2CFAC_FDR%2CBED_CAPACITY_TYPE%2CBED_CAPACITY%2CCOUNTY_NAME&filters=%7B%7D&format=csv'
 df3=pd.read_csv(url,delimiter=',')
-logging.info('%s fetched', datetime.datetime.now())
 hospital_capacity=df3[df3['FAC_FDR']=='GENERAL ACUTE CARE HOSPITAL'].groupby('COUNTY_NAME').sum()['BED_CAPACITY']
 ICU_capacity=df3[(df3['FAC_FDR']=='GENERAL ACUTE CARE HOSPITAL')&(df3['BED_CAPACITY_TYPE']=='INTENSIVE CARE')].groupby('COUNTY_NAME').sum()['BED_CAPACITY']
 del df3
@@ -162,10 +127,8 @@ caData=caData.merge(hospital_capacity,left_on='COUNTY', right_index=True, how='l
 
 #Population
 print("Getting populations...")
-logging.info('%s Fetching county population data', datetime.datetime.now())
 url='https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/co-est2019-alldata.csv'
 df4=pd.read_csv(url,delimiter=',',encoding='latin-1')
-logging.info('%s fetched', datetime.datetime.now())
 statepop=df4.groupby('STNAME').sum().POPESTIMATE2019.to_frame(name="pop")
 statepop['STATE']=statepop.index.str.upper()
 #df=df.merge(statepop,how='left',on='STATE')
@@ -185,22 +148,14 @@ caData['ICU']=caData['icu_covid_confirmed_patients']+caData['icu_suspected_covid
 caData['ICU_usage']=caData['ICU']/caData['ICU_capacity']*100
 caData['hospital_usage']=caData['hospitalized']/caData['hospital_capacity']*100
 caData.sort_values(by=['county','Date'],inplace=True)
-#mask=~(caData.county.shift(1)==caData.county)
 caData['positiveIncrease']=caData['cases']
 caData['deathIncrease']=caData['deaths']
 caData['noncovid_icu']=caData.ICU_capacity-caData.ICU-caData.icu_available_beds
 
-
-#fields=['totalTestResultsIncrease','deathIncrease','positiveIncrease']
-#for field in fields:
-#    df=rolling_7_avg(df,'Date','state',field)
 print("adding averages and whatnot...")    
 fields=['new_case','new_death','Positive','total_tests']
 for field in fields:
     data=rolling_7_avg(data,'Date','state',field)
-
-#df['positivity']=df.positiveIncrease_avg/df.totalTestResultsIncrease_avg
-#df.loc[df.positivity > 1,'positivity'] = 1
 
 data['positivity']=(data.Positive_avg/data.total_tests_avg).clip(upper=1,lower=0)
 
@@ -213,10 +168,6 @@ fields=['positiveIncrease','deathIncrease','positiveIncrease_avg','deathIncrease
 for field in fields:
     caData[field+'_percap']=caData[field]/caData['pop']*100000
 
-#fields=['totalTestResultsIncrease_avg','deathIncrease_avg','positiveIncrease_avg','hospitalizedCurrently']
-#for field in fields:
-#    df[field+'_percap']=df[field]/df['pop']*100000
-    
 fields=['new_case','new_death','new_case_avg','new_death_avg']
 for field in fields:
     data[field+'_percap']=data[field]/data['pop']*100000
@@ -289,14 +240,11 @@ padding=Spacer(width=30, height=10, sizing_mode='fixed')
 foci=['NY','NJ','CA']
 
 largest_positive_percap = set(data[data.Date>(datetime.datetime.now()+datetime.timedelta(days=-7)).date()][['state','new_case_avg_percap']].groupby('state').sum().nlargest(10,'new_case_avg_percap').index)
-#largest_positive_percap = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg_percap']].groupby('state').sum().nlargest(10,'positiveIncrease_avg_percap').index)
 largest_positive = set(data[data.Date>(datetime.datetime.now()+datetime.timedelta(days=-7)).date()][['state','new_case_avg']].groupby('state').sum().nlargest(10,'new_case_avg').index)
-#largest_positive = set(df[df.Date>datetime.datetime.now()+datetime.timedelta(days=-7)][['state','positiveIncrease_avg']].groupby('state').sum().nlargest(10,'positiveIncrease_avg').index)
 universe = largest_positive_percap.union(largest_positive)
 universe.update(foci)
 
 state_cases=percap(data,'new_case_avg','New Cases (7-day avg)',foci)
-#state_hospitalizations=percap('hospitalizedCurrently','Hospitalized',foci)
 state_deaths=percap(data,'new_death_avg','Deaths (7-day avg)',foci)
 positivity=statecompare(data,'positivity','Positivity (7-day avg)',universe,foci)
 
@@ -322,7 +270,6 @@ nation.yaxis.formatter=NumeralTickFormatter(format="0,")
 
 nation.line(x='Date', y='new_death_avg', source=source,legend_label = 'Avg Deaths', color='red',y_range_name="deaths",width=2)
 nation.line(x='Date', y='new_death', source=source,legend_label = 'Daily Deaths', color='red',y_range_name="deaths",alpha=0.2)
-#nation.line(x='Date', y='hospitalizedCurrently', source=source,legend_label = 'Hospitalized', color='orange',width=2)
 nation.line(x='Date', y='new_case_avg', source=source,legend_label = 'Avg Cases', color='green',width=2)
 nation.line(x='Date', y='new_case', source=source,legend_label = 'Daily Cases', color='green',alpha=0.2)
 nation.yaxis[0].axis_label = 'Cases'
@@ -331,7 +278,6 @@ hover = HoverTool(tooltips =[
      ('Date','@Date{%F}'),
      ('Cases','@new_case{0,}'),
      ('Avg Cases','@new_case_avg{0,}'),
-     #('Hospitalized','@hospitalizedCurrently{0,}'),
      ('Deaths','@new_death{0,}'),
      ('Avg Deaths','@new_death_avg{0,}'),
      ],
@@ -362,8 +308,7 @@ nationalcharts=Panel(child=
                                  [state_cases,
                                   positivity,
                                   padding],
-                                 [#state_hospitalizations,
-                                  state_deaths,
+                                 [state_deaths,
                                   padding]],
                          sizing_mode='stretch_width',
                          ),
@@ -376,13 +321,15 @@ def get_geodatasource(gdf):
     json_data = json.dumps(json.loads(gdf.to_json()))
     return GeoJSONDataSource(geojson = json_data)
 
-shapefile = os.path.join(dir_path,'Counties/cb_2018_us_county_500k.shp')
+if debug==True:
+    shapefile = 'Counties/cb_2018_us_county_500k.shp'
+else:
+    shapefile = os.path.join(dir_path,'Counties/cb_2018_us_county_500k.shp')
 gdf = gpd.read_file(shapefile)[['NAME','geometry']]
 merged = gdf.merge(caData[caData.Date==caData.Date.max()+pd.DateOffset(-1)],
                    left_on = 'NAME',
                    right_on = 'County', how = 'left').drop(columns=['Date','hospitalized_covid_patients','all_hospital_beds','icu_suspected_covid_patients'])
 palette=OrRd9[::-1]
-
 
 def plot_map(df,metric,high,low,**kwargs):
     global palette
@@ -417,6 +364,7 @@ icu_map=plot_map(merged,'ICU_usage',30,0,title='ICU Usage as of '+data_as_of,lab
 
 #%% State 
 print("making state charts...")
+
 
 source = ColumnDataSource(data[data.state=='CA'].drop(columns=[
        'cases_probable', 'tests_viral_positive', 'tests_viral_negative',
@@ -497,7 +445,6 @@ icu.vline_stack(['ICU','noncovid_icu','icu_available_beds'], x='Date', source=ca
 icu.yaxis.formatter=NumeralTickFormatter(format="0,")
 icu.legend.location = "top_left"
 
-
 statecharts=Panel(child=
                          layout([[tests,cases,deaths],[hospitalizations,icu,Spacer(width=30, height=10, sizing_mode='fixed')],
                                  [cases_map,hospitalization_map,icu_map,deaths_map,Spacer(width=30, height=10, sizing_mode='fixed')]],
@@ -532,9 +479,7 @@ def countychart(county):
     cases.yaxis.axis_label = 'Cases/100k'
     
     deaths = figure(x_axis_type='datetime',
-                    #y_range=Range1d(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*1.05/10)*10, bounds=(0,math.ceil(caData[caData.County.isin(counties)].deathIncrease.max()*10))),
                    plot_height=300,
-                   #plot_width=cases.width,
                    toolbar_location='above',
                    tools=["pan,reset,save,xwheel_zoom",HoverTool(tooltips=[
                    ('Date','@Date{%F}'),
@@ -580,13 +525,6 @@ countycharts=Panel(child=
                    title='Region'
                 )
 #%% Vaccinations
-#vacc=pd.read_csv('https://raw.githubusercontent.com/govex/COVID-19/master/data_tables/vaccine_data/raw_data/vaccine_data_us_state_timeline.csv',sep=',')
-#vacc['Date']=pd.to_datetime(vacc.date)
-#vacc=vacc.merge(statepop,how='left',left_on='Province_State',right_on='STNAME')
-
-#vacc['pct_shipped_administered']=vacc.doses_admin_total/vacc.doses_shipped_total
-#vacc['pct_pop_vaccinated']=vacc['doses_admin_total']/vacc['pop']
-#vacc['state']=vacc.stabbr
 """
 print("making vaccine charts...")
 
@@ -753,13 +691,14 @@ page=Tabs(tabs=[nationalcharts,
                 ])
 
 print("saving file to "+fileloc+'COVID19.html')
-logging.info('%s saving file to %sCOVID19.html', datetime.datetime.now(), fileloc)
 output_file(fileloc+'COVID19.html')
 templateLoader = jinja2.FileSystemLoader(searchpath="./")
 templateEnv = jinja2.Environment(loader=templateLoader)
-TEMPLATE_FILE = os.path.join(dir_path,"home.html")
+if debug==True:
+    TEMPLATE_FILE='home.html'
+else:
+    TEMPLATE_FILE = os.path.join(dir_path,"home.html")
 with open(TEMPLATE_FILE) as file_:
     template=jinja2.Template(file_.read())
-save(page,title='COVID19'#,template=template
-     )
+save(page,title='COVID19',template=template)
 
