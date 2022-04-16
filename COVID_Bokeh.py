@@ -318,15 +318,15 @@ nationalcharts=Panel(child=
 print("making maps...")
 
 def get_geodatasource(gdf):
-    json_data = json.dumps(json.loads(gdf.to_json()))
+    json_data=json.dumps(json.loads(gdf.to_json()))
     return GeoJSONDataSource(geojson = json_data)
 
 if debug==True:
-    shapefile = 'Counties/cb_2018_us_county_500k.shp'
+    shapefile='Counties/cb_2018_us_county_500k.shp'
 else:
-    shapefile = os.path.join(dir_path,'Counties/cb_2018_us_county_500k.shp')
-gdf = gpd.read_file(shapefile)[['NAME','geometry']]
-merged = gdf.merge(caData[caData.Date==caData.Date.max()+pd.DateOffset(-1)],
+    shapefile=os.path.join(dir_path,'Counties/cb_2018_us_county_500k.shp')
+gdf=gpd.read_file(shapefile)[['NAME','geometry']]
+merged=gdf.merge(caData[caData.Date==caData.Date.max()+pd.DateOffset(-1)],
                    left_on = 'NAME',
                    right_on = 'County', how = 'left').drop(columns=['Date','hospitalized_covid_patients','all_hospital_beds','icu_suspected_covid_patients'])
 palette=OrRd9[::-1]
