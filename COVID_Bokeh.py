@@ -51,8 +51,8 @@ except:
     print('no data found. starting new dataset')
     data=pd.DataFrame()
     start='2020-03-01'
-    
-def cdc_cases(start):        
+
+def cdc_cases(start):
     end=(datetime.datetime.now()-datetime.timedelta(days=1)).strftime('%Y-%m-%d')
     enddate=datetime.datetime.strptime(end, '%Y-%m-%d')
     startdate=datetime.datetime.strptime(start, '%Y-%m-%d')
@@ -152,7 +152,7 @@ caData['positiveIncrease']=caData['cases']
 caData['deathIncrease']=caData['deaths']
 caData['noncovid_icu']=caData.ICU_capacity-caData.ICU-caData.icu_available_beds
 
-print("adding averages and whatnot...")    
+print("adding averages and whatnot...")
 fields=['new_case','new_death','Positive','total_tests']
 for field in fields:
     data=rolling_7_avg(data,'Date','state',field)
@@ -163,7 +163,7 @@ fields=['positiveIncrease','deathIncrease']
 
 for field in fields:
     caData=rolling_7_avg(caData,'Date','COUNTY',field)
-    
+
 fields=['positiveIncrease','deathIncrease','positiveIncrease_avg','deathIncrease_avg','hospitalized','ICU']
 for field in fields:
     caData[field+'_percap']=caData[field]/caData['pop']*100000
@@ -186,7 +186,7 @@ def statecompare(df,metric,metricname,universe,foci,**kwargs):
         yformatter="0%"
     else:
         hoverformatter='{0,}'
-        yformatter="0,"        
+        yformatter="0,"
     palette=Category20[20]
     colors = itertools.cycle(palette)
     p = figure(title=metricname, x_axis_type='datetime', plot_width=200, plot_height=400,
@@ -196,7 +196,7 @@ def statecompare(df,metric,metricname,universe,foci,**kwargs):
                 sizing_mode='stretch_width'
                 )
     grp_list=universe
-    grp_list=sorted(list(grp_list))  
+    grp_list=sorted(list(grp_list))
     lines={}
     for i,color in zip(range(len(grp_list)),colors):
         source = ColumnDataSource(
@@ -317,7 +317,7 @@ nationalcharts=Panel(child=
 #%% Maps
 print("making maps...")
 
-def get_geodatasource(gdf):    
+def get_geodatasource(gdf):
     json_data = json.dumps(json.loads(gdf.to_json()))
     return GeoJSONDataSource(geojson = json_data)
 
@@ -342,7 +342,6 @@ def plot_map(df,metric,high,low,**kwargs):
         tooltips=[("Name", "@NAME"), (kwargs.get('label','metric'), "@"+metric+'{0.00}')],
         sizing_mode='scale_width',
         )
-    
     p.grid.grid_line_color = None
     p.hover.point_policy = "follow_mouse"
     p.patches(xs='xs', ys='ys', source=source,
@@ -362,7 +361,7 @@ cases_map=plot_map(merged,'positiveIncrease_avg_percap',30,0,title='Daily New Ca
 deaths_map=plot_map(merged,'deathIncrease_avg_percap',1,0,title='Daily New Deaths (7-day avg) as of '+data_as_of,label='daily new deaths per 100k')
 icu_map=plot_map(merged,'ICU_usage',30,0,title='ICU Usage as of '+data_as_of,label='% ICU Usage')
 
-#%% State 
+#%% State
 print("making state charts...")
 
 
@@ -472,12 +471,11 @@ def countychart(county):
                    ('7-day avg New Cases','@positiveIncrease_avg{0,}'),
                    ],
                    formatters={'@Date': 'datetime'})],
-                   active_scroll='wheel_zoom')       
+                   active_scroll='wheel_zoom')
     cases.line(x='Date', y='positiveIncrease_percap', source=source, color='grey',legend_label='Daily')
     cases.line(x='Date', y='positiveIncrease_avg_percap', source=source, color='blue',width=2, legend_label='7-day average')
     cases.legend.location = "top_left"
     cases.yaxis.axis_label = 'Cases/100k'
-    
     deaths = figure(x_axis_type='datetime',
                    plot_height=300,
                    toolbar_location='above',
@@ -488,12 +486,11 @@ def countychart(county):
                    ],
                    formatters={'@Date': 'datetime'})],
                    active_scroll='xwheel_zoom',
-                   sizing_mode = 'stretch_width')        
+                   sizing_mode = 'stretch_width')
     deaths.line(x='Date', y='deathIncrease', source=source, color='grey',legend_label='Daily')
     deaths.line(x='Date', y='deathIncrease_avg', source=source, color='blue',width=2, legend_label='7-day average')
     deaths.legend.location = "top_left"
     deaths.yaxis.axis_label = 'Deaths'
-    
     ICU = figure(x_axis_type='datetime',
                  y_range=Range1d(0,caData[caData.County==county].ICU_capacity.max(), bounds=(0,caData[caData.County==county].ICU_capacity.max())),
                plot_height=300,
@@ -511,7 +508,6 @@ def countychart(county):
     ICU.yaxis.formatter=NumeralTickFormatter(format="0,")
     ICU.legend.location = "top_left"
     ICU.yaxis.axis_label = 'ICU Utilization'
-    
     deaths.x_range=cases.x_range
     ICU.x_range=cases.x_range
     return layout([[cases],[deaths],[ICU]],sizing_mode='stretch_width')
@@ -595,7 +591,7 @@ def region_map():
     else:
         print("Unexpected cartesian when joining regions to data. Join canceled.")
         return caData
-        
+
 caData=region_map()
 icu_data=caData.groupby(by=['Date','region']).sum()[['icu_available_beds','ICU_capacity','noncovid_icu','icu_suspected_covid_patients','icu_covid_confirmed_patients']]
 icu_data['avail_percent']=icu_data['icu_available_beds']/icu_data['ICU_capacity']
@@ -614,7 +610,6 @@ def regioncompare(metric,metricname):
                 )
     grp_list = icu_data.region.unique()
     grp_list=sorted(list(grp_list))
-    
     lines={}
     for i,color in zip(range(len(grp_list)),colors):
         source = ColumnDataSource(
